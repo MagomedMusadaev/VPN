@@ -4,20 +4,20 @@ FROM golang:1.21
 # Устанавливаем рабочую директорию в контейнере
 WORKDIR /app
 
-# Копируем go.mod и go.sum для загрузки зависимостей
-COPY go.mod go.sum ./
+# Копируем go.mod и go.sum для загрузки зависимостей из корня
+COPY ../go.mod ../go.sum ./
 
 # Загружаем зависимости
 RUN go mod download
 
-# Копируем все файлы проекта в рабочую директорию
-COPY . .
+# Копируем весь проект для сборки
+COPY ../ ./
 
 # Устанавливаем переменные окружения
 ENV GO_ENV=production
 
 # Собираем бинарный файл
-RUN go build -o main .
+RUN go build -o main ./cmd/main.go
 
 # Указываем путь к файлу .env (если он должен быть в корне)
 ENV ENV_FILE_PATH=/app/.env
