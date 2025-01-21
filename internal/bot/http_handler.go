@@ -75,8 +75,3 @@ func (t *HttpHandler) SendKeyRequest(apiURL string, payload entities.KeyPayload)
 
 	return respBody.Key, nil
 }
-
-// TODO:
-// разобраться с логами
-// разобраться с названиями ключей
-//
