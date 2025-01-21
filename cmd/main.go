@@ -42,7 +42,8 @@ func main() {
 	updates := botAPI.GetUpdatesChan(u)
 
 	// Инициализация messenger и handler
-	messenger := bot.NewMessengerBot(botAPI)
+	httpHandler := bot.NewHttpHandler()
+	messenger := bot.NewMessengerBot(botAPI, httpHandler)
 	handler := bot.NewCallbackHandler(messenger)
 
 	// Основной цикл обработки обновлений

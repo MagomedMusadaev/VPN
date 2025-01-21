@@ -38,9 +38,11 @@ func (h *CallbackHandler) Button(callback *tgbotapi.CallbackQuery) {
 }
 
 func (h *CallbackHandler) Message(update tgbotapi.Update) {
-
-	switch update.Message.Text {
-	case "/start":
+	//update.Message.Text
+	switch {
+	case update.Message.Text == "/start":
 		h.messenger.GetRes(update)
+	case update.Message.Text == "/getkey":
+		h.messenger.GetKey(update)
 	}
 }
