@@ -7,12 +7,11 @@ WORKDIR /app
 # Копируем go.mod и go.sum для загрузки зависимостей из корня
 COPY go.mod go.sum ./
 
-
 # Загружаем зависимости
 RUN go mod download
 
 # Копируем весь проект для сборки
-COPY ../ ./
+COPY . ./
 
 # Устанавливаем переменные окружения
 ENV GO_ENV=production
