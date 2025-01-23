@@ -9,40 +9,49 @@ type CallbackHandlerInt interface {
 	Message(update tgbotapi.Update)
 }
 
-// CallbackHandler обрабатывает callback-запросы
 type CallbackHandler struct {
-	messenger MessengerBot
+	messenger *MessengerBot
 }
 
-// NewCallbackHandler создаёт новый экземпляр CallbackHandler
 func NewCallbackHandler(messengerBot *MessengerBot) *CallbackHandler {
 	return &CallbackHandler{
-		messenger: *messengerBot,
+		messenger: messengerBot,
 	}
 }
 
-// Button обрабатывает callback-запросы
+// Button - обрабатывает callback-запросы
 func (h *CallbackHandler) Button(callback *tgbotapi.CallbackQuery) {
 	data := callback.Data
 
 	switch data {
 	case "buy_1m":
-		h.messenger.SendMessage(callback.Message.Chat.ID, "Вы выбрали ключ на 1 месяц. Генерация...")
+		h.messenger.SendPaymentInfoWithButton(callback, 1)
+	case "buy_2m":
+		h.messenger.SendPaymentInfoWithButton(callback, 2)
+	case "buy_3m":
+		h.messenger.SendPaymentInfoWithButton(callback, 3)
 	case "buy_6m":
-		h.messenger.SendMessage(callback.Message.Chat.ID, "Вы выбрали ключ на 6 месяцев. Генерация...")
-	case "buy_1y":
-		h.messenger.SendMessage(callback.Message.Chat.ID, "Вы выбрали ключ на 1 год. Генерация...")
+		h.messenger.SendPaymentInfoWithButton(callback, 6)
+	case "get_referral":
+		//h.messenger.SendMessage(callback.Message.Chat.ID, "реферальная ссылка")
 	default:
-		h.messenger.SendMessage(callback.Message.Chat.ID, "Неизвестная команда.")
+		//h.messenger.SendMessage(callback.Message.Chat.ID, "Ты дурак что ли!?")
 	}
 }
 
+// Message - обрабатывает text-запросы
 func (h *CallbackHandler) Message(update tgbotapi.Update) {
-	//update.Message.Text
-	switch {
-	case update.Message.Text == "/start":
-		h.messenger.GetRes(update)
-	case update.Message.Text == "/getkey":
+
+	switch update.Message.Text {
+	case "/start":
+		h.messenger.GetInfoStart(update)
+	case "/daykey":
 		h.messenger.GetKey(update)
+		//case "/connect_str":
+		//	h.messenger.(update)
+		//case "/instruction":
+		//	h.messenger.(update)
+		//case "/referral":
+		//	h.messenger.(update)
 	}
 }
