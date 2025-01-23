@@ -2,76 +2,64 @@ package bot
 
 import (
 	"bot_vpn/internal/entities"
-	"bytes"
-	"crypto/tls"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
-	"time"
 )
 
 type HttpHandlerInt interface {
 	SendKeyRequest(apiURL string, payload entities.KeyPayload) (string, error)
+	PaymentWebhook(w http.ResponseWriter, r *http.Request)
 }
 
 type HttpHandler struct {
+	messenger *MessengerBot
 }
 
-func NewHttpHandler() *HttpHandler {
-	return &HttpHandler{}
+func NewHttpHandler(messenger *MessengerBot) *HttpHandler {
+	return &HttpHandler{
+		messenger: messenger,
+	}
 }
 
-func createInsecureHTTPClient() *http.Client {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true, // Отключаем проверку SSL
-		},
-	}
-	client := &http.Client{
-		Transport: tr,
-		Timeout:   10 * time.Minute, // Устанавливаем тайм-аут
-	}
-	return client
-}
+// PaymentWebhook - обрабатывает вебхук платежной системы.
+func (t *HttpHandler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
+	const op = "internal/bot/http_handler/PaymentWebhook"
 
-func (t *HttpHandler) SendKeyRequest(apiURL string, payload entities.KeyPayload) (string, error) {
-	const op = "internal/bot/http_handler"
+	// Проверяем метод запроса
+	if r.Method != http.MethodPost {
+		slog.Error(op, "Неверный метод запроса")
+		return
+	}
 
-	payloadBytes, err := json.Marshal(payload)
+	// Читаем тело запроса
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		slog.Error(op, err)
-		return "", err
+		slog.Error(op, "Ошибка при чтении тела запроса:", err)
+		return
 	}
 
-	req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		slog.Error(op, err)
-		return "", err
+	// Логируем тело запроса для отладки
+	slog.Info(op, "Получена полезная нагрузка", slog.String("payload", string(body)))
+
+	// Распаковываем JSON в структуру MetaData
+	var metadata entities.MetaData
+	if err := json.Unmarshal(body, &metadata); err != nil {
+		slog.Error(op, "Ошибка парсинга JSON:", slog.String("error", err.Error()))
+		return
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-
-	client := createInsecureHTTPClient()
-
-	resp, err := client.Do(req)
-	if err != nil {
-		slog.Error(op, err)
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		slog.Error(op, resp.StatusCode) // TODO: доработать 201
-		//return "", err
+	// Проверяем наличие обязательных данных
+	if metadata.Metadata.UserID == "" || metadata.Metadata.Tariff == "" {
+		slog.Error(op, "Отсутствуют обязательные поля метаданных")
+		return
 	}
 
-	var respBody entities.RespBody
-	if err = json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
-		slog.Error(op, err)
-		return "", err
-	}
+	// Логика обработки платежа
+	// 1. Проверяем наличие пользователя в БД
+	// 2. Если пользователь существует, обновляем время действия ключа и уведомляем его.
+	// 3. Если пользователя нет, получаем данные из Redis, создаём нового пользователя и возвращаем ключ.
 
-	slog.Info(op, "key generated successfully:", respBody.Key)
-
-	return respBody.Key, nil
+	// TODO: Реализовать вызов сервиса (messages.go) для обработки платежа
 }
