@@ -37,12 +37,12 @@ func main() {
 	botAPI.Debug = false
 	slog.Info(fmt.Sprintf("Авторизован на аккаунте %s", botAPI.Self.UserName))
 
-	// Переменная для клиента Redis (мнимое подключение, пока нет реального Redis)
-	//var client *redis.Client // TODO: Реализовать подключение Redis, если потребуется
-
-	// Инициализация зависимостей проекта
 	connDB := bot.ConnectPostgresDB() // Подключение к базе данных PostgreSQL
 	client := bot.NewRedis()          // Подключение Redis
+
+	if connDB == nil && client == nil {
+		os.Exit(1)
+	}
 
 	// Создание зависимостей
 	repo := bot.NewRepo(connDB, client)
@@ -97,27 +97,15 @@ func initBotAPI() (*tgbotapi.BotAPI, tgbotapi.UpdatesChannel, error) {
 	return botAPI, updates, nil
 }
 
-//TODO: 										АКТУАЛЬНЫЕ ЗАДАЧИ:
-// Разобраться с логами (где-то повторятся логи)
-// Разобраться с названиями ключей
-// Разобраться с каналом при включении бота, чтобы все сообщения обнулялись которые есть в канале (в чате)
-// Прочитать документацию API Ю-Касса
-// Поменять название кнопки с connect_string на connect_str
-// Добавить too many request (3 second)
-// Добавить п
-
-/*
-ХРАНИМ
-chat_id BIGINT UNIQUE NOT NULL,            -- Уникальный идентификатор пользователя в Telegram
-user_tg_id BIGINT NOT NULL,               -- Telegram ID пользователя (не всегда совпадает с chat_id, если в группе)
-*/
-/*
-НЕ ХРАНИИМ
-id SERIAL PRIMARY KEY,                    -- Уникальный идентификатор записи
-key_id INT UNIQUE NOT NULL,                -- ID ключа в системе Outline Manager
-key VARCHAR(255) NOT NULL,                 -- Ключ подключения (например, токен или идентификатор)
-key_status VARCHAR(50) NOT NULL,           -- Статус ключа (например, активен, истёк, ограничен)
-key_start_date TIMESTAMP NOT NULL,        -- Дата начала действия ключа
-key_expiry_date TIMESTAMP NOT NULL,       -- Дата истечения действия ключа
-created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Дата первой записи данных пользователя
-*/
+//TODO
+// ХРАНИМ:
+// chat_id BIGINT UNIQUE NOT NULL,            -- Уникальный идентификатор пользователя в Telegram
+// user_tg_id BIGINT NOT NULL,               -- Telegram ID пользователя (не всегда совпадает с chat_id, если в группе)
+// НЕ ХРАНИИМ:
+// id SERIAL PRIMARY KEY,                    -- Уникальный идентификатор записи
+// key_id INT UNIQUE NOT NULL,                -- ID ключа в системе Outline Manager
+// key VARCHAR(255) NOT NULL,                 -- Ключ подключения (например, токен или идентификатор)
+// key_status VARCHAR(50) NOT NULL,           -- Статус ключа (например, активен, истёк, ограничен)
+// key_start_date TIMESTAMP NOT NULL,        -- Дата начала действия ключа
+// key_expiry_date TIMESTAMP NOT NULL,       -- Дата истечения действия ключа
+// created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Дата первой записи данных пользователя

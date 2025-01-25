@@ -24,7 +24,7 @@ func NewHttpHandler(messenger *MessengerBot) *HttpHandler {
 }
 
 // PaymentWebhook - обрабатывает вебхук платежной системы.
-func (t *HttpHandler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
+func (h *HttpHandler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	const op = "internal/bot/http_handler/PaymentWebhook"
 
 	// Проверяем метод запроса
@@ -58,7 +58,9 @@ func (t *HttpHandler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// Логика обработки платежа
 	// 1. Проверяем наличие пользователя в БД
-	// 2. Если пользователь существует, обновляем время действия ключа и уведомляем его.
+
+	//h.messenger.CheckAndUpdateUserKey(metadata)
+
 	// 3. Если пользователя нет, получаем данные из Redis, создаём нового пользователя и возвращаем ключ.
 
 	// TODO: Реализовать вызов сервиса (messages.go) для обработки платежа

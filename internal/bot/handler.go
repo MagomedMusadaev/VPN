@@ -47,11 +47,11 @@ func (h *CallbackHandler) Message(update tgbotapi.Update) {
 		h.messenger.GetInfoStart(update)
 	case "/daykey":
 		h.messenger.GetKey(update)
-		//case "/connect_str":
-		//	h.messenger.(update)
-		//case "/instruction":
-		//	h.messenger.(update)
-		//case "/referral":
-		//	h.messenger.(update)
+	case "/connect_str":
+		h.messenger.TimeFunction(update)
+	case "/instruction":
+		h.messenger.TimeFunction(update)
+	case "/referral":
+		h.messenger.TimeFunction(update)
 	}
 }
