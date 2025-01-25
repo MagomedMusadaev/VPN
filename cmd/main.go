@@ -97,6 +97,7 @@ func initBotAPI() (*tgbotapi.BotAPI, tgbotapi.UpdatesChannel, error) {
 	return botAPI, updates, nil
 }
 
+//тест деплой
 //TODO: 										АКТУАЛЬНЫЕ ЗАДАЧИ:
 // Разобраться с логами (где-то повторятся логи)
 // Разобраться с названиями ключей
