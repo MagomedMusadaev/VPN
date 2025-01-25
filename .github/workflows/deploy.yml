@@ -1,0 +1,34 @@
+name: Deploy to Server
+
+# Событие, при котором запускается Workflow
+on:
+  push:
+    branches:
+      - main  # Workflow запускается только при push в ветку main
+
+# Определение джоба
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Шаг 1: Клонируем код репозитория
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # Шаг 2: Настраиваем SSH для подключения к серверу
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # Шаг 3: Выполняем команды деплоя на сервере
+      - name: Deploy to server
+        run: |
+          ssh -o StrictHostKeyChecking=no root@212.22.74.213 << 'EOF'
+            cd /root/VPN
+            git reset --hard
+            git pull origin main
+            docker-compose down
+            docker-compose -f docker/docker-compose.yml up --build -d
+          EOF
