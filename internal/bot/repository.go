@@ -27,7 +27,7 @@ func NewRepo(db *sql.DB, client *redis.Client) *Repo {
 // IsUserInDB - Функция проверяет наличие пользователя в базе данных по userID.
 func (r *Repo) IsUserInDB(userID int64) (bool, error) {
 	// SQL запрос для проверки наличия пользователя в базе данных по userID.
-	query := "SELECT COUNT(1) FROM users WHERE user_id = $1"
+	query := "SELECT COUNT(1) FROM vpn WHERE user_id = $1"
 
 	var count int
 	// Выполняем запрос и сканируем результат в переменную count.
@@ -38,7 +38,6 @@ func (r *Repo) IsUserInDB(userID int64) (bool, error) {
 		//	return false, nil
 		//}
 		// Логируем ошибку и возвращаем её.
-		slog.Error("internal/bot/repository/IsUserInDB", err)
 		return false, nil
 	}
 
@@ -60,4 +59,33 @@ func (r *Repo) AddUserToRedis(userID, chatID string, ttl time.Duration) error {
 	slog.Info("Пользователь успешно добавлен в Redis на временное хранение", slog.String("userID", userID))
 
 	return nil
+}
+
+func (r *Repo) UpdateKeyExpiration(userID int64) error {
+	query := "UPDATE vpn SET key_expiration_date = NOW() + (добавить как-то время для ключа по выбранному тарифу) WHERE user_tg_id = $1"
+	_, err := r.db.Exec(query, userID)
+	return err
+}
+
+// GetUserFromRedis получает значение chatID по ключу userID из Redis.
+func (r *Repo) GetUserFromRedis(userID string) (string, error) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
+
+	// Попытка получить значение chatID из Redis по ключу userID.
+	chatID, err := r.client.Get(ctx, userID).Result()
+	if err != nil {
+		// Если ошибка Redis.Nil, то ключ не существует в Redis, возвращаем пустую строку и nil.
+		if err == redis.Nil {
+			return "", nil
+		}
+		slog.Error("Ошибка при чтении данных из Redis", slog.String("error", err.Error()))
+		return "", err
+	}
+
+	// Логируем успешное получение данных для пользователя.
+	slog.Info("Пользователь успешно найден в Redis", slog.String("userID", userID))
+
+	return chatID, nil
 }

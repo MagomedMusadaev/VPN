@@ -2,6 +2,7 @@ package bot
 
 import (
 	"bot_vpn/internal/entities"
+	"bot_vpn/internal/utils"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log/slog"
@@ -36,11 +37,9 @@ func NewMessengerBot(botAPI *tgbotapi.BotAPI, httpRequest *HttpRequest, keyBoard
 	}
 }
 
+// GetInfoStart - обработчик для отправки приветственного сообщения и предоставления информации о тарифах.
 func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 	const op = "internal/bot/messages.go/GetInfoStart"
-
-	//update.Message.Chat.ID
-	//update.Message.From.ID
 
 	welcomeMessage := "🎉 Приветствуем тебя в Keeper VPN! 🎉\n\n" +
 		"🚀 Обеспечь себе безлимитный и быстрый VPN.\n\n" +
@@ -81,14 +80,12 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 	userID := callback.From.ID
 	chatID := callback.Message.Chat.ID
 
-	fmt.Println("-----------------", userID, chatID)
-
 	// Текст сообщения с информацией о тарифе
 	text := fmt.Sprintf(
 		"Вы выбрали тариф на %s. 💎\n"+
 			"Стоимость: %d рублей. 💳\n\n"+
 			"После оплаты ключ будет сгенерирован и отправлен автоматически. 🔑",
-		getMonthString(month), price,
+		utils.GetMonthString(month), price,
 	)
 
 	// Генерация ссылки на оплату с добавлением метаданных пользователя
@@ -130,6 +127,38 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 	}
 }
 
+func (m *MessengerBot) CheckAndUpdateUserKey(metadata *entities.MetaData) {
+	const op = "internal/bot/messages.go/CheckAndUpdateUserKey"
+
+	intUserID, err := strconv.ParseInt(metadata.Metadata.UserID, 10, 64)
+	if err != nil {
+		// Обработка ошибки, если преобразование не удалось
+		slog.Error(op, "Ошибка при преобразовании строки в int64", slog.String("error", err.Error()))
+		return
+	}
+
+	exists, err := m.repo.IsUserInDB(intUserID)
+	if err == nil && exists {
+
+		//m.repo.UpdateKeyExpiration(intUserID)
+		// Если пользователь существует в базе данных, можем выполнить логику для обновления данных или продолжить выполнение программы.
+		// В противном случае, если пользователя нет, добавляем нового пользователя со всеми данными.
+	} else {
+		// Если пользователя нет в базе данных или произошла ошибка при запросе, выполняем логику добавления нового пользователя.
+		// Это может быть добавление нового пользователя в базу данных или сохранение его временно в Redis, как обсуждалось ранее.
+	}
+}
+
+// TimeFunction - временная функция
+func (m *MessengerBot) TimeFunction(update tgbotapi.Update) {
+	messageText := fmt.Sprint("На стадии разработки")
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)
+	if _, err := m.botAPI.Send(msg); err != nil {
+		return
+	}
+}
+
+// нужно полностью переделать эту функцию (пока для тестинга)
 func (m *MessengerBot) GetKey(update tgbotapi.Update) {
 	const op = "internal/bot/messages.go/GetKey"
 
@@ -163,31 +192,4 @@ func (m *MessengerBot) GetKey(update tgbotapi.Update) {
 	}
 
 	slog.Info("key sent successfully", userID)
-}
-
-func (m *MessengerBot) CheckUserExistence(userID int64) {
-	const op = "internal/bot/messages.go/CheckUserExistence"
-
-	exists, err := m.repo.IsUserInDB(userID)
-	if err != nil {
-		return
-	}
-
-	if !exists { // нет данных в db
-		// добавить эти данные в редис (ttl - 1 часа)
-	}
-	// если есть, то ничего делать не нужно
-	// про логи не забываем
-
-}
-
-// getMonthString - Вспомогательная функция для правильного склонения слова "месяц" в зависимости от числа.
-func getMonthString(month int) string {
-	if month%10 == 1 && month != 11 {
-		return fmt.Sprintf("%d месяц", month)
-	} else if (month%10 >= 2 && month%10 <= 4) && !(month >= 12 && month <= 14) {
-		return fmt.Sprintf("%d месяца", month)
-	} else {
-		return fmt.Sprintf("%d месяцев", month)
-	}
 }
