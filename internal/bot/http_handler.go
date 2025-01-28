@@ -59,9 +59,8 @@ func (h *HttpHandler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	// Логика обработки платежа
 	// 1. Проверяем наличие пользователя в БД
 
-	//h.messenger.CheckAndUpdateUserKey(metadata)
+	h.messenger.ManageUserKeyAfterPayment(metadata)
 
-	// 3. Если пользователя нет, получаем данные из Redis, создаём нового пользователя и возвращаем ключ.
+	// 2. Если пользователя нет, получаем данные из Redis, создаём нового пользователя и возвращаем ключ.
 
-	// TODO: Реализовать вызов сервиса (messages.go) для обработки платежа
 }
