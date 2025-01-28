@@ -77,7 +77,7 @@ func main() {
 // initBotAPI - функция для инициализации API Telegram и получения обновлений
 func initBotAPI() (*tgbotapi.BotAPI, tgbotapi.UpdatesChannel, error) {
 	// Получение токена бота из переменных окружения
-	tokenBot := os.Getenv("TEST_BOT_TOKEN")
+	tokenBot := os.Getenv("BOT_TOKEN")
 	if tokenBot == "" {
 		return nil, nil, fmt.Errorf("отсутствует токен бота")
 	}
