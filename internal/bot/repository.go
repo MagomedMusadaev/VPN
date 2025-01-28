@@ -56,7 +56,7 @@ func (r *Repo) AddUserToRedis(userID, chatID string, ttl time.Duration) error {
 		slog.Error("Ошибка при записи данных в Redis", slog.String("error", err.Error()))
 		return err
 	}
-	slog.Info("Пользователь успешно добавлен в Redis на временное хранение", slog.String("userID", userID))
+	slog.Info("Пользователь успешно добавлен в Redis до оплаты:", slog.String("userID", userID))
 
 	return nil
 }

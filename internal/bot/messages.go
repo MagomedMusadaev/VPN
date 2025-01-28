@@ -79,6 +79,7 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 	// Получение уникального идентификатора пользователя
 	userID := callback.From.ID
 	chatID := callback.Message.Chat.ID
+	userName := callback.From.UserName
 
 	// Текст сообщения с информацией о тарифе
 	text := fmt.Sprintf(
@@ -108,7 +109,10 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 		slog.Error(op, err)
 		return
 	}
-	slog.Info("Данные для оплаты отправлены. Пользователь -", callback.From.ID, callback.From.UserName)
+	slog.Info("Данные для оплаты отправлены",
+		"userID", userID,
+		"userName", userName,
+	)
 
 	// Проверяем наличие пользователя в БД
 	exists, err := m.repo.IsUserInDB(userID)
@@ -118,17 +122,25 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 
 	// Если пользователь не найден в БД, добавляем его временно в Redis
 	if !exists {
-		slog.Info("Пользователь не найден в базе данных, добавляем в Redis:", userID)
+		slog.Info("Пользователь не найден в db, добавляем в Redis:",
+			"userID", userID,
+			"userName", userName,
+		)
 
-		err = m.repo.AddUserToRedis(fmt.Sprintf("%d", userID), fmt.Sprintf("%d", chatID), ttl) // TODO: user_id: struct{}
+		err = m.repo.AddUserToRedis(
+			fmt.Sprintf("%d", userID),
+			fmt.Sprintf("%d", chatID),
+			ttl,
+		) // TODO: user_id: struct{}(можно в редис писать только 1 параметр) - userID & chatID равны
 		if err != nil {
 			return
 		}
 	}
 }
 
-func (m *MessengerBot) CheckAndUpdateUserKey(metadata *entities.MetaData) {
-	const op = "internal/bot/messages.go/CheckAndUpdateUserKey"
+// ManageUserKeyAfterPayment обрабатывает оплату пользователя и управляет его ключом доступа.
+func (m *MessengerBot) ManageUserKeyAfterPayment(metadata entities.MetaData) {
+	const op = "internal/bot/messages.go/ManageUserKeyAfterPayment"
 
 	intUserID, err := strconv.ParseInt(metadata.Metadata.UserID, 10, 64)
 	if err != nil {
@@ -147,6 +159,13 @@ func (m *MessengerBot) CheckAndUpdateUserKey(metadata *entities.MetaData) {
 		// Если пользователя нет в базе данных или произошла ошибка при запросе, выполняем логику добавления нового пользователя.
 		// Это может быть добавление нового пользователя в базу данных или сохранение его временно в Redis, как обсуждалось ранее.
 	}
+	// Функция выполняет следующие шаги:
+	// 1. Проверяет, существует ли пользователь в базе данных:
+	//    - Если пользователь существует, обновляет время истечения его ключа доступа в соответствии с продлённой подпиской.
+	//    - Если пользователь не найден, создаёт новую запись в базе данных с необходимыми данными.
+	// 2. Генерирует или обновляет ключ доступа для пользователя.
+	// 3. Отправляет обновлённый или вновь созданный ключ доступа пользователю.
+
 }
 
 // TimeFunction - временная функция
