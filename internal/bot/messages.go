@@ -170,7 +170,7 @@ func (m *MessengerBot) ManageUserKeyAfterPayment(metadata entities.MetaData) {
 
 // TimeFunction - временная функция
 func (m *MessengerBot) TimeFunction(update tgbotapi.Update) {
-	messageText := fmt.Sprint("На стадии разработки")
+	messageText := fmt.Sprint("На стадии разработки!!!")
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)
 	if _, err := m.botAPI.Send(msg); err != nil {
 		return
