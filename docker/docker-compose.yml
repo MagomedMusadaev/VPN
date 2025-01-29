@@ -6,8 +6,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     container_name: bot-vpn
-    ports:
-      - "8085:8085"
     env_file:
-      - docker/.env
+      - ../.env # Подключаем .env файл из корня проекта
+    volumes:
+      - ../.env:/../.env # Монтируем .env файл внутрь контейнера, если нужно
+    ports:
+      - "8080:8080"
     command: ["./main"]
