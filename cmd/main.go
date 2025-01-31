@@ -28,7 +28,7 @@ func main() {
 	// Инициализация API Telegram и получение обновлений
 	botAPI, updates, err := initBotAPI()
 	if err != nil {
-		slog.Error(op, "Ошибка инициализации бота", slog.String("error", err.Error()))
+		slog.Error(op, "Ошибка инициализации бота", err.Error())
 		return
 	}
 
@@ -36,10 +36,12 @@ func main() {
 	botAPI.Debug = false
 	slog.Info(fmt.Sprintf("Авторизован на аккаунте %s", botAPI.Self.UserName))
 
-	connDB := bot.ConnectPostgresDB() // Подключение к базе данных PostgreSQL
-	client := bot.NewRedis()          // Подключение Redis
-
-	if connDB == nil && client == nil {
+	connDB, err := bot.ConnectPostgresDB() // Подключение к базе данных PostgreSQL
+	if err != nil {
+		os.Exit(1)
+	}
+	client, err := bot.NewRedis() // Подключение Redis
+	if err != nil {
 		os.Exit(1)
 	}
 
@@ -85,7 +87,7 @@ func initBotAPI() (*tgbotapi.BotAPI, tgbotapi.UpdatesChannel, error) {
 	// Инициализация API Telegram
 	botAPI, err := tgbotapi.NewBotAPI(tokenBot)
 	if err != nil {
-		return nil, nil, fmt.Errorf("ошибка создания API бота: %w", err)
+		return nil, nil, err
 	}
 
 	// Настройка получения обновлений от Telegram
@@ -109,4 +111,25 @@ func initBotAPI() (*tgbotapi.BotAPI, tgbotapi.UpdatesChannel, error) {
 // key_expiry_date TIMESTAMP NOT NULL,       -- Дата истечения действия ключа
 // created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Дата первой записи данных пользователя
 
-// возможно создание функции для slog будет хорошей практикой
+//Таблица users (Пользователи)
+//Поле						Тип данных									Описание
+//id						SERIAL (Primary Key)						Уникальный ID пользователя в базе
+//telegram_id				BIGINT UNIQUE								ID пользователя в Telegram
+//chat_id					BIGINT UNIQUE								ID чата с пользователем
+//referral_code 			VARCHAR(255) UNIQUE							Реферальная ссылка пользователя
+//created_at				TIMESTAMP DEFAULT CURRENT_TIMESTAMP			Время создания записи
+//referred_by				INT											ID пользователя кто его пригласил
+//FOREIGN KEY (referred_by) REFERENCES users(id) ON DELETE SET NULL  	Внешний ключ на приглашённого
+
+//Таблица keys (Ключи доступа)
+//Поле						Тип данных									Описание
+//id						SERIAL (Primary Key)						Уникальный ID ключа
+//user_id					INT (Foreign Key)							Ссылка на пользователя (users.id)
+//key						VARCHAR(255)								Ключ доступа
+//created_at				TIMESTAMP									Время создания ключа
+//expires_at				TIMESTAMP									Время истечения ключа
+//CHECK (expires_at > created_at)         								Проверка, что время истечения ключа больше времени создания
+
+//CREATE INDEX idx_referral_code ON users(referral_code);
+//CREATE INDEX idx_telegram_id ON users(telegram_id);
+//CREATE INDEX idx_referred_by ON users(referred_by); - В ДАЛЁКОМ БУДУШЕМ (ЕСЛИ ПРОЕКТ БУДЕТ ЖИТЬ)

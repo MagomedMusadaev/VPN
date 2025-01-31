@@ -50,7 +50,7 @@ func (h *CallbackHandler) Message(update tgbotapi.Update) {
 	case "/connect_str":
 		h.messenger.TimeFunction(update)
 	case "/instruction":
-		h.messenger.TimeFunction(update)
+		h.messenger.GetInstruction(update)
 	case "/referral":
 		h.messenger.TimeFunction(update)
 	}

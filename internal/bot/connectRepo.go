@@ -11,7 +11,7 @@ import (
 )
 
 // NewRedis - создает и возвращает клиента для подключения к Redis.
-func NewRedis() *redis.Client {
+func NewRedis() (*redis.Client, error) {
 	const op = "internal/bot/connectRepo/NewRedis"
 
 	redisAddr := os.Getenv("REDIS_ADDR")
@@ -31,15 +31,15 @@ func NewRedis() *redis.Client {
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		slog.Error(op, "Не удалось подключиться к Redis:", err)
-		return nil
+		return nil, err
 	}
 
 	slog.Info("Подключение к Redis успешно установлено")
-	return rdb
+	return rdb, nil
 }
 
 // ConnectPostgresDB - подключается к базе данных PostgreSQL и возвращает объект соединения.
-func ConnectPostgresDB() *sql.DB {
+func ConnectPostgresDB() (*sql.DB, error) {
 	const op = "internal/bot/connectRepo/ConnectPostgresDB"
 
 	hostPSQL := os.Getenv("POSTGRES_HOST")
@@ -57,16 +57,16 @@ func ConnectPostgresDB() *sql.DB {
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		slog.Error(op, "Не удалось подключиться к db:", err)
-		return nil
+		return nil, err
 	}
 
 	// Проверка соединения
 	if err := db.Ping(); err != nil {
 		slog.Error(op, "Нет коннекта с db:", err)
-		return nil
+		return nil, err
 	}
 
 	slog.Info("Успешно подключено к PostgresDB")
 
-	return db
+	return db, nil
 }
