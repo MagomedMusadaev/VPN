@@ -25,16 +25,19 @@ jobs:
             git pull origin main
             docker-compose down
 
-            docker-compose -f docker/docker-compose.yml up --build -d \
-              -e BOT_TOKEN=${{ secrets.BOT_TOKEN }} \
-              -e API_URL=${{ secrets.API_URL }} \
-              -e PORT=${{ secrets.PORT }} \
-              -e POSTGRES_HOST=${{ secrets.POSTGRES_HOST }} \
-              -e POSTGRES_NAME=${{ secrets.POSTGRES_NAME }} \
-              -e POSTGRES_PASS=${{ secrets.POSTGRES_PASS }} \
-              -e POSTGRES_PORT=${{ secrets.POSTGRES_PORT }} \
-              -e POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
-              -e REDIS_ADDR=${{ secrets.REDIS_ADDR }} \
-              -e REDIS_DB=${{ secrets.REDIS_DB }} \
-              -e REDIS_PASS=${{ secrets.REDIS_PASS }} \
-              -e SERVER_IP=${{ secrets.SERVER_IP }}
+            # Экспорт переменных окружения
+            export BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+            export API_URL=${{ secrets.API_URL }}
+            export PORT=${{ secrets.PORT }}
+            export POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
+            export POSTGRES_NAME=${{ secrets.POSTGRES_NAME }}
+            export POSTGRES_PASS=${{ secrets.POSTGRES_PASS }}
+            export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
+            export POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+            export REDIS_ADDR=${{ secrets.REDIS_ADDR }}
+            export REDIS_DB=${{ secrets.REDIS_DB }}
+            export REDIS_PASS=${{ secrets.REDIS_PASS }}
+            export SERVER_IP=${{ secrets.SERVER_IP }}
+
+            # Запуск контейнеров с переменными окружения
+            docker-compose -f docker/docker-compose.yml up --build -d
