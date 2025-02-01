@@ -98,6 +98,8 @@ func initBotAPI() (*tgbotapi.BotAPI, tgbotapi.UpdatesChannel, error) {
 	return botAPI, updates, nil
 }
 
+//test deploy
+
 //TODO
 // ХРАНИМ:
 // chat_id BIGINT UNIQUE NOT NULL,            -- Уникальный идентификатор пользователя в Telegram
