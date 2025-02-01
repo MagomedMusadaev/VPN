@@ -1,39 +1,16 @@
-#version: '3.3'
-#
-#services:
-#  bot-vpn:
-#    build:
-#      context: .. # Контекст сборки — корень проекта
-#      dockerfile: docker/Dockerfile # Путь к Dockerfile
-#    container_name: bot-vpn
-#    env_file:
-#      - ../.env # Подключаем .env файл из корня проекта
-#    volumes:
-#      - ../.env:/../.env # Монтируем .env файл внутрь контейнера, если нужно
-#    ports:
-#      - "8080:8080" # Если ваше приложение использует HTTP-сервер, настройте порт
-#    environment:
-#      GO_ENV: production # Устанавливаем переменные окружения
-#    command: ["./main"] # Указываем, как запускать приложение
-
-
-
-
-
 version: '3.3'
 
 services:
   bot-vpn:
     build:
-      context: .. # Контекст сборки — корень проекта
-      dockerfile: docker/Dockerfile # Путь к Dockerfile
+      context: ..  # Контекст сборки — корень проекта
+      dockerfile: docker/Dockerfile  # Путь к Dockerfile
     container_name: bot-vpn
-    env_file:
-      - ../.env # Подключаем .env файл из корня проекта
-    volumes:
-      - ../.env:/app/.env # Исправленный путь монтирования .env файла
+    restart: always
     ports:
-      - "8080:8080" # Если ваше приложение использует HTTP-сервер, настройте порт
+      - "8080:8080"  # Если приложение использует HTTP-сервер
     environment:
-      GO_ENV: production # Устанавливаем переменные окружения
-    command: ["./main"] # Указываем, как запускать приложение
+      - BOT_TOKEN=${BOT_TOKEN}
+#      - DATABASE_URL=${DATABASE_URL}  # Укажите нужные переменные
+      - GO_ENV=production
+    command: ["./main"]  # Указываем, как запускать приложение
