@@ -24,5 +24,6 @@ jobs:
             git reset --hard
             git pull origin main
             docker-compose down
-            BOT_TOKEN=${{ secrets.BOT_TOKEN }} docker-compose up --build -d
+            BOT_TOKEN=${{ secrets.BOT_TOKEN }} docker-compose -f docker/docker-compose.yml up --build -d
+
 
