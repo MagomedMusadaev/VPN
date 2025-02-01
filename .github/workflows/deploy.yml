@@ -1,5 +1,4 @@
 name: Deploy to Server
-#123
 
 on:
   push:
@@ -25,18 +24,17 @@ jobs:
             git reset --hard
             git pull origin main
             docker-compose down
-            BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-            API_URL=${{ secrets.API_URL }} 
-            PORT=${{ secrets.PORT }} 
-            POSTGRES_HOST=${{ secrets.POSTGRES_HOST }} 
-            POSTGRES_NAME=${{ secrets.POSTGRES_NAME }} 
-            POSTGRES_PASS=${{ secrets.POSTGRES_PASS }} 
-            POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
-            POSTGRES_USER=${{ secrets.POSTGRES_USER }} 
-            REDIS_ADDR=${{ secrets.REDIS_ADDR }} 
-            REDIS_DB=${{ secrets.REDIS_DB }} 
-            REDIS_PASS=${{ secrets.REDIS_PASS }} 
-            SERVER_IP=${{ secrets.SERVER_IP }} 
-            docker-compose -f docker/docker-compose.yml up --build -d
-  
-  
+
+            docker-compose -f docker/docker-compose.yml up --build -d \
+              -e BOT_TOKEN=${{ secrets.BOT_TOKEN }} \
+              -e API_URL=${{ secrets.API_URL }} \
+              -e PORT=${{ secrets.PORT }} \
+              -e POSTGRES_HOST=${{ secrets.POSTGRES_HOST }} \
+              -e POSTGRES_NAME=${{ secrets.POSTGRES_NAME }} \
+              -e POSTGRES_PASS=${{ secrets.POSTGRES_PASS }} \
+              -e POSTGRES_PORT=${{ secrets.POSTGRES_PORT }} \
+              -e POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
+              -e REDIS_ADDR=${{ secrets.REDIS_ADDR }} \
+              -e REDIS_DB=${{ secrets.REDIS_DB }} \
+              -e REDIS_PASS=${{ secrets.REDIS_PASS }} \
+              -e SERVER_IP=${{ secrets.SERVER_IP }}

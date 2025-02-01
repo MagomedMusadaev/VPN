@@ -9,17 +9,23 @@ services:
     ports:
       - "8080:8080"  # Если приложение использует HTTP-сервер
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      - API_URL=${API_URL}
-      - PORT=${PORT}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_NAME=${POSTGRES_NAME}
-      - POSTGRES_PASS=${POSTGRES_PASS}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - REDIS_ADDR=${REDIS_ADDR}
-      - REDIS_DB=${REDIS_DB}
-      - REDIS_PASS=${REDIS_PASS}
-      - SERVER_IP=${SERVER_IP}
+      - BOT_TOKEN
+      - API_URL
+      - PORT
+      - POSTGRES_HOST
+      - POSTGRES_NAME
+      - POSTGRES_PASS
+      - POSTGRES_PORT
+      - POSTGRES_USER
+      - REDIS_ADDR
+      - REDIS_DB
+      - REDIS_PASS
+      - SERVER_IP
       - GO_ENV=production
-    command: ["./main"]  # Указываем, как запускать приложение
+    command: ["./main"]  # Запуск Go-приложения
+
+#Если переменные окружения отсутствуют — значит, docker-compose их не получил. В этом случае попробуй заменить environment:
+#environment:
+  #BOT_TOKEN: ${BOT_TOKEN}
+  #API_URL: ${API_URL}
+  #...
