@@ -5,6 +5,7 @@ import (
 	"bot_vpn/internal/utils"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"log"
 	"log/slog"
 	"os"
 	"strconv"
@@ -46,8 +47,7 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 		"Для подключения:\n\n" +
 		"📌 Выберите тариф\n" +
 		"💳 Оплатите план\n" +
-		"🛠️ Следуйте простым инструкциям\n\n" +
-		"🟢 Вот ваши доступные пакеты:"
+		"🛠️ Следуйте простым инструкциям\n\n"
 
 	keyboard := m.keyBoard.GetTariffKeyboard()
 
@@ -61,9 +61,40 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 	}
 }
 
+// GetInstruction - отправляет пользователю инструкции по подключению к VPN через бота
+func (m *MessengerBot) GetInstruction(update tgbotapi.Update) {
+	const op = "internal/bot/messages.go/GetInstruction"
+
+	// Текст инструкции с HTML-разметкой
+	instructionText := "🌐 <b>Инструкция по подключению VPN</b> <a>" +
+		"</a> <a href=\"https://telegra.ph/Nastrojka-VPN-cherez-Outline-01-30\">&#8203;</a>"
+
+	// Создаем сообщение с инструкцией
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, instructionText)
+
+	// Устанавливаем ParseMode для HTML
+	msg.ParseMode = "HTML"
+
+	// Отправляем сообщение
+	_, err := m.botAPI.Send(msg)
+	if err != nil {
+		log.Println(op, "Error sending message:", err)
+	}
+}
+
 // SendPaymentInfoWithButton - отправляет информацию о тарифе с кнопкой для перехода к оплате.
 func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuery, month int) {
 	const op = "internal/bot/messages.go/SendPaymentInfoWithButton"
+
+	editMsg := tgbotapi.NewEditMessageReplyMarkup(
+		callback.Message.Chat.ID,
+		callback.Message.MessageID,
+		tgbotapi.NewInlineKeyboardMarkup([]tgbotapi.InlineKeyboardButton{}), // Убираем клавиатуру
+	)
+
+	if _, err := m.botAPI.Send(editMsg); err != nil {
+		slog.Error(op, err)
+	}
 
 	// Массив с ценами для тарифов
 	prices := []int{100, 190, 270, 490}
@@ -81,7 +112,7 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 	chatID := callback.Message.Chat.ID
 	userName := callback.From.UserName
 
-	// Текст сообщения с информацией о тарифе
+	//Текст сообщения с информацией о тарифе
 	text := fmt.Sprintf(
 		"Вы выбрали тариф на %s. 💎\n"+
 			"Стоимость: %d рублей. 💳\n\n"+
@@ -96,13 +127,14 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 	)
 
 	// Кнопка для перехода на ссылку оплаты
-	button := tgbotapi.NewInlineKeyboardButtonURL("Оплатить 💳", paymentLink)
+	button := tgbotapi.NewInlineKeyboardButtonURL(fmt.Sprintf("Оплатить %d RUB 💳", price), paymentLink)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(button),
 	)
 
 	// Создание и отправка сообщения с кнопкой
 	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "HTML"
 	msg.ReplyMarkup = keyboard
 
 	if _, err := m.botAPI.Send(msg); err != nil {
@@ -144,7 +176,6 @@ func (m *MessengerBot) ManageUserKeyAfterPayment(metadata entities.MetaData) {
 
 	intUserID, err := strconv.ParseInt(metadata.Metadata.UserID, 10, 64)
 	if err != nil {
-		// Обработка ошибки, если преобразование не удалось
 		slog.Error(op, "Ошибка при преобразовании строки в int64", slog.String("error", err.Error()))
 		return
 	}
@@ -168,7 +199,7 @@ func (m *MessengerBot) ManageUserKeyAfterPayment(metadata entities.MetaData) {
 
 }
 
-// TimeFunction - временная функция
+// TimeFunction - врEменная функция
 func (m *MessengerBot) TimeFunction(update tgbotapi.Update) {
 	messageText := fmt.Sprint("На стадии разработки!!!")
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)
@@ -201,9 +232,12 @@ func (m *MessengerBot) GetKey(update tgbotapi.Update) {
 		return
 	}
 
-	messageText := fmt.Sprintf("Ваш ключ доступа: %s", key) // сделать чтобы можно было скопировать ключ
+	// Формируем сообщение с ключом
+	text := fmt.Sprintf("Ваш ключ доступа:\n```%s```", key)
 
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)
+	// Отправляем сообщение
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+	msg.ParseMode = "Markdown"
 
 	if _, err := m.botAPI.Send(msg); err != nil {
 		slog.Error(op, "Failed to send message")

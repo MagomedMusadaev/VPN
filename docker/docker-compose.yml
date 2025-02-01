@@ -3,11 +3,15 @@ version: '3.3'
 services:
   bot-vpn:
     build:
-      context: .
-      dockerfile: docker/Dockerfile
+      context: .. # Контекст сборки — корень проекта
+      dockerfile: docker/Dockerfile # Путь к Dockerfile
     container_name: bot-vpn
-    ports:
-      - "8085:8085"
     env_file:
-      - docker/.env
-    command: ["./main"]
+      - ../.env # Подключаем .env файл из корня проекта
+    volumes:
+      - ../.env:/../.env # Монтируем .env файл внутрь контейнера, если нужно
+    ports:
+      - "8080:8080" # Если ваше приложение использует HTTP-сервер, настройте порт
+    environment:
+      GO_ENV: production # Устанавливаем переменные окружения
+    command: ["./main"] # Указываем, как запускать приложение

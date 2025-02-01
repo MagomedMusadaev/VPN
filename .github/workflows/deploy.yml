@@ -1,51 +1,34 @@
 name: Deploy to Server
 
+# Событие, при котором запускается Workflow
 on:
   push:
     branches:
-      - main
+      - main  # Workflow запускается только при push в ветку main
 
+# Определение джоба
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # Шаг 1: Клонируем код репозитория
       - name: Checkout code
         uses: actions/checkout@v2
 
+      # Шаг 2: Настраиваем SSH для подключения к серверу
       - name: Set up SSH
         uses: webfactory/ssh-agent@v0.5.3
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
+      # Шаг 3: Выполняем команды деплоя на сервере
       - name: Deploy to server
         run: |
-          ssh -o ServerAliveInterval=60 -o StrictHostKeyChecking=no root@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no root@212.22.74.213 << 'EOF'
             cd /root/VPN
             git reset --hard
             git pull origin main
             docker-compose down
-            docker system prune -af
-            docker rmi -f $(docker images -q)  # Удаляем старые образы
-
-            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-            # Создаём .env в нужной директории
-            cat > docker/.env <<EOL
-            BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-            API_URL=${{ secrets.API_URL }}
-            REDIS_ADDR=${{ secrets.REDIS_ADDR }}
-            REDIS_PASS=${{ secrets.REDIS_PASS }}
-            REDIS_DB=${{ secrets.REDIS_DB }}
-            POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
-            POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
-            POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-            POSTGRES_PASS=${{ secrets.POSTGRES_PASS }}
-            POSTGRES_NAME=${{ secrets.POSTGRES_NAME }}
-            PORT=${{ secrets.PORT }}
-            EOL
-
-            # Пересобираем контейнер без кеша и форсируем пересоздание
-            docker-compose -f docker/docker-compose.yml build --no-cache
-            docker-compose -f docker/docker-compose.yml up --force-recreate --build -d
+            docker-compose -f docker/docker-compose.yml up --build -d
           EOF
