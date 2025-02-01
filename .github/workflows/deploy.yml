@@ -13,32 +13,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-#      - name: Deploy to server
-#        uses: appleboy/ssh-action@v0.1.10
-#        with:
-#          host: ${{ secrets.SERVER_IP }}
-#          username: ${{ secrets.SERVER_USER }}
-#          key: ${{ secrets.SSH_PRIVATE_KEY }}
-#          script: |
-#            cd /root/VPN || git clone https://github.com/${{ github.repository }} /root/VPN
-#            cd /root/VPN
-#            git reset --hard
-#            git pull origin main
-#            docker-compose down
-#            BOT_TOKEN=${{ secrets.BOT_TOKEN }} docker-compose up --build -d
-
-      - name: Deploy via SSH
+      - name: Deploy to server
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            set -e
-            if [ ! -d "/root/VPN" ]; then
-              git clone git@github.com:MagomedMusadaev/VPN.git /root/VPN
-            fi
             cd /root/VPN
             git reset --hard
             git pull origin main
-            if ! command -v docker-compose &> /dev/null; then
+            docker-compose down
+            BOT_TOKEN=${{ secrets.BOT_TOKEN }} docker-compose up --build -d
+
