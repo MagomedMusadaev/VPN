@@ -6,11 +6,20 @@ services:
       context: ..  # Контекст сборки — корень проекта
       dockerfile: docker/Dockerfile  # Путь к Dockerfile
     container_name: bot-vpn
-    restart: always
     ports:
       - "8080:8080"  # Если приложение использует HTTP-сервер
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
-#      - DATABASE_URL=${DATABASE_URL}  # Укажите нужные переменные
+      - API_URL=${API_URL}
+      - PORT=${PORT}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_NAME=${POSTGRES_NAME}
+      - POSTGRES_PASS=${POSTGRES_PASS}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_PASS=${REDIS_PASS}
+      - SERVER_IP=${SERVER_IP}
       - GO_ENV=production
     command: ["./main"]  # Указываем, как запускать приложение
