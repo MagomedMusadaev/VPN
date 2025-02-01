@@ -66,8 +66,8 @@ func (m *MessengerBot) GetInstruction(update tgbotapi.Update) {
 	const op = "internal/bot/messages.go/GetInstruction"
 
 	// Текст инструкции с HTML-разметкой
-	instructionText := "🌐 <b>Инструкция по подключению VPN</b> <a>" +
-		"</a> <a href=\"https://telegra.ph/Nastrojka-VPN-cherez-Outline-01-30\">&#8203;</a>"
+	instructionText := "🌐 <b>Инструкция по подключению VPN</b>" +
+		"<a href=\"https://telegra.ph/Nastrojka-VPN-cherez-Outline-01-30\">&#8203;</a>"
 
 	// Создаем сообщение с инструкцией
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, instructionText)
@@ -114,9 +114,10 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 
 	//Текст сообщения с информацией о тарифе
 	text := fmt.Sprintf(
-		"Вы выбрали тариф на %s. 💎\n"+
-			"Стоимость: %d рублей. 💳\n\n"+
-			"После оплаты ключ будет сгенерирован и отправлен автоматически. 🔑",
+		"<b>💵 Оплата </b> \n"+
+			"Вы выбрали тариф на %s. 💎 \n"+
+			"Стоимость: %d рублей. 💳 \n"+
+			"После оплаты ключ будет сгенерирован и отправлен автоматически. 🔑\n",
 		utils.GetMonthString(month), price,
 	)
 

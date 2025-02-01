@@ -4,6 +4,7 @@ import (
 	"bot_vpn/internal/bot"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"log/slog"
 	"os"
@@ -13,15 +14,11 @@ func main() {
 	const op = "cmd.main"
 
 	// Загрузка переменных окружения из .env файла
-	//if err := godotenv.Load("../.env"); err != nil {
-	//	slog.Error(op, "Ошибка загрузки .env файла", slog.String("error", err.Error()))
-	//	return
-	//}
+	if err := godotenv.Load("../.env"); err != nil {
+		slog.Error(op, "Ошибка загрузки .env файла", slog.String("error", err.Error()))
+	}
 
-	//port := os.Getenv("PORT")
-
-	port := "8085"
-
+	port := os.Getenv("PORT")
 	if port == "" {
 		slog.Error(op, "Не указан порт для сервера")
 		return
