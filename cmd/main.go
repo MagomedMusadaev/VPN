@@ -7,6 +7,7 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"log/slog"
+	"net/http"
 	"os"
 )
 
@@ -47,20 +48,20 @@ func main() {
 	// Создание зависимостей
 	repo := bot.NewRepo(connDB, client)
 	messenger := bot.NewMessengerBot(botAPI, bot.NewHttpRequest(), bot.NewKeyBoard(), repo)
-	//httpHandler := bot.NewHttpHandler(messenger)
+	httpHandler := bot.NewHttpHandler(messenger)
 	handler := bot.NewCallbackHandler(messenger)
 
-	// Инициализация маршрутов HTTP
-	//bot.InitRout(httpHandler)
+	//Инициализация маршрутов HTTP
+	bot.InitRout(httpHandler)
 
-	// Запуск HTTP-сервера
-	//go func() {
-	//	slog.Info("Сервер запущен", slog.String("url", "http://localhost:"+port))
-	//	if err = http.ListenAndServe(":"+port, nil); err != nil {
-	//		slog.Error(op, "Ошибка запуска сервера", slog.String("error", err.Error()))
-	//		os.Exit(1) // Завершаем приложение, если сервер упал
-	//	}
-	//}()
+	//Запуск HTTP-сервера
+	go func() {
+		slog.Info("Сервер запущен", slog.String("url", "http://localhost:"+port))
+		if err = http.ListenAndServe(":"+port, nil); err != nil {
+			slog.Error(op, "Ошибка запуска сервера", slog.String("error", err.Error()))
+			os.Exit(1) // Завершаем приложение, если сервер упал
+		}
+	}()
 
 	// Основной цикл обработки обновлений Telegram
 	for update := range updates {
