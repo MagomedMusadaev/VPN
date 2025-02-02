@@ -1,42 +1,29 @@
-name: Deploy to Server
-#123
-
-on:
-  push:
-    branches:
-      - main  # Запуск при пуше в main
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /root/VPN
-            git reset --hard
-            git pull origin main
-            docker-compose down
-            BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-            API_URL=${{ secrets.API_URL }} 
-            PORT=${{ secrets.PORT }} 
-            POSTGRES_HOST=${{ secrets.POSTGRES_HOST }} 
-            POSTGRES_NAME=${{ secrets.POSTGRES_NAME }} 
-            POSTGRES_PASS=${{ secrets.POSTGRES_PASS }} 
-            POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
-            POSTGRES_USER=${{ secrets.POSTGRES_USER }} 
-            REDIS_ADDR=${{ secrets.REDIS_ADDR }} 
-            REDIS_DB=${{ secrets.REDIS_DB }} 
-            REDIS_PASS=${{ secrets.REDIS_PASS }} 
-            SERVER_IP=${{ secrets.SERVER_IP }} 
-            docker-compose -f docker/docker-compose.yml up --build -d
-  
-  
+- name: Deploy to server
+  uses: appleboy/ssh-action@v0.1.10
+  with:
+    host: ${{ secrets.SERVER_IP }}
+    username: ${{ secrets.SERVER_USER }}
+    key: ${{ secrets.SSH_PRIVATE_KEY }}
+    script: |
+      cd /root/VPN
+      git reset --hard
+      git pull origin main
+      docker-compose down
+      
+      # Создаём .env файл с переменными из GitHub Secrets
+      cat > .env <<EOL
+      BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+      API_URL=${{ secrets.API_URL }}
+      PORT=${{ secrets.PORT }}
+      POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
+      POSTGRES_NAME=${{ secrets.POSTGRES_NAME }}
+      POSTGRES_PASS=${{ secrets.POSTGRES_PASS }}
+      POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
+      POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+      REDIS_ADDR=${{ secrets.REDIS_ADDR }}
+      REDIS_DB=${{ secrets.REDIS_DB }}
+      REDIS_PASS=${{ secrets.REDIS_PASS }}
+      SERVER_IP=${{ secrets.SERVER_IP }}
+      EOL
+      
+      docker-compose -f docker/docker-compose.yml up --build -d
