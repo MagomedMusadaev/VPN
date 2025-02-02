@@ -1,6 +1,6 @@
 package entities
 
-// PaymentResponse - структура ответа
+// PaymentResponse - структура ответаааа
 type PaymentResponse struct {
 	ID           string `json:"id"`
 	Confirmation struct {
