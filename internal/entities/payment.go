@@ -12,7 +12,7 @@ type Event struct {
 	PaymentMethod PaymentMethod          `json:"payment_method"`
 }
 
-// AmountResp - представляет сумму платежа.
+// AmountResp - представляет сумму платежаа.
 type AmountResp struct {
 	Value    string `json:"value"`
 	Currency string `json:"currency"`

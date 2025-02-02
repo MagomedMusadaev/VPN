@@ -1,6 +1,6 @@
 package entities
 
-// PaymentRequest представляет тело запроса на создание платежа
+// PaymentRequest представляет тело запроса на создание платежаа
 type PaymentRequest struct {
 	Capture      bool              `json:"capture"`      // Флаг захвата платежа
 	Description  string            `json:"description"`  // Описание платежа
