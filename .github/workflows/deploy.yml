@@ -40,6 +40,8 @@ jobs:
             REDIS_DB=${{ secrets.REDIS_DB }}
             REDIS_PASS=${{ secrets.REDIS_PASS }}
             SERVER_IP=${{ secrets.SERVER_IP }}
+            YK_SHOP_ID=${{ secrets.YK_SHOP_ID }}
+            YK_SECRET_KEY=${{ secrets.YK_SECRET_KEY }}
             EOL
             
             docker-compose -f docker/docker-compose.yml up --build -d

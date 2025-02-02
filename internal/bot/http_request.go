@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -41,7 +42,7 @@ func createInsecureHTTPClient() *http.Client {
 
 // SendKeyRequest - функция генерации ключа подключения.
 func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload) (string, error) { // TODO: нужно дорабоать (возможно)
-	const op = "internal/bot/http_handler/SendKeyRequest"
+	const op = "internal/bot/http_request/SendKeyRequest"
 
 	// Сериализация полезной нагрузки в JSON.
 	payloadBytes, err := json.Marshal(payload)
@@ -84,4 +85,58 @@ func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload)
 
 	// Возвращаем ключ из ответа.
 	return respBody.Key, nil
+}
+
+func (h *HttpRequest) GetPaymentURL(jsonData []byte, shopID, secretKey, tgUserID string) (string, error) {
+	const op = "internal/bot/http_request/GetPaymentURL"
+
+	url := "https://api.yookassa.ru/v3/payments"
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		slog.Error(op, err)
+		return "", err
+	}
+
+	// генерируем уникальный ключ оплаты
+	idempotenceKey := fmt.Sprintf("payment-%d", time.Now().UnixNano())
+
+	// Устанавливаем заголовки
+	req.SetBasicAuth(shopID, secretKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotence-Key", idempotenceKey) // Уникальный ключ для повторных запросов
+
+	// Отправляем запрос
+	client := &http.Client{
+		Timeout: 30 * time.Second, // тайм-аут до 30 секунд
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error(op, err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	// Проверяем статус код
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		// Логируем тело ответа для диагностики
+		body, _ := io.ReadAll(resp.Body)
+		slog.Error(fmt.Sprintf("%s: неожиданный статус код: %d, тело ответа: %s", op, resp.StatusCode, string(body)))
+		return "", fmt.Errorf("%s: неожиданный статус код: %d", op, resp.StatusCode)
+	}
+
+	// Декодируем ответ
+	var paymentResponse entities.PaymentResponse
+	if err := json.NewDecoder(resp.Body).Decode(&paymentResponse); err != nil {
+		slog.Error(op, err)
+		return "", err
+	}
+
+	if paymentResponse.Confirmation.ConfirmationURL == "" {
+		err = fmt.Errorf("%s: не удалось получить ссылку на оплату", op)
+		slog.Error(op, err)
+		return "", err
+	}
+
+	return paymentResponse.Confirmation.ConfirmationURL, nil
 }

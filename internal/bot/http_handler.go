@@ -44,23 +44,56 @@ func (h *HttpHandler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	slog.Info(op, "Получена полезная нагрузка", slog.String("payload", string(body)))
 
 	// Распаковываем JSON в структуру MetaData
-	var metadata entities.MetaData
-	if err := json.Unmarshal(body, &metadata); err != nil {
+	var event entities.Event
+	if err := json.Unmarshal(body, &event); err != nil {
 		slog.Error(op, "Ошибка парсинга JSON:", slog.String("error", err.Error()))
 		return
 	}
 
-	// Проверяем наличие обязательных данных
-	if metadata.Metadata.UserID == "" || metadata.Metadata.Tariff == "" {
-		slog.Error(op, "Отсутствуют обязательные поля метаданных")
-		return
+	switch event.Status {
+	case "payment.succeeded":
+		// Обрабатываем успешный платёж
+		slog.Info("payment.succeeded:", event)
+		if userTgID, ok := event.Metadata["user_tg_id"]; ok {
+			slog.Info("user_tg_id:", userTgID)
+		} else {
+			slog.Info("user_tg_id не найден")
+		}
+
+	case "payment.canceled":
+		// Обрабатываем отменённый платёж
+		slog.Info("payment.canceled:", event)
+		if userTgID, ok := event.Metadata["user_tg_id"]; ok {
+			slog.Info("user_tg_id:", userTgID)
+		} else {
+			slog.Info("user_tg_id не найден")
+		}
 	}
+
+	//switch event.Status {
+	//case "payment.succeeded":
+	//	// Обрабатываем успешный платёж
+	//	//processSuccessfulPayment(event.Object)
+	//
+	//	slog.Info("payment.succeeded:", event)
+	//	slog.Info("payment.succeeded:", event.Metadata["user_tg_id"])
+	//
+	//case "payment.canceled":
+	//	// Обрабатываем отменённый платёж
+	//	//processCancelledPayment(event.Object)
+	//
+	//	slog.Info("payment.succeeded:", event)
+	//	slog.Info("payment.succeeded:", event.Metadata["user_tg_id"])
+	//
+	//// Добавьте другие обработчики для других типов событий
+	//default:
+	//	http.Error(w, "Неизвестный тип события", http.StatusBadRequest)
+	//}
 
 	// Логика обработки платежа
 	// 1. Проверяем наличие пользователя в БД
 
-	h.messenger.ManageUserKeyAfterPayment(metadata)
+	//h.messenger.ManageUserKeyAfterPayment(metadata)
 
 	// 2. Если пользователя нет, получаем данные из Redis, создаём нового пользователя и возвращаем ключ.
-
 }

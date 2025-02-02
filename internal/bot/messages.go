@@ -3,6 +3,7 @@ package bot
 import (
 	"bot_vpn/internal/entities"
 	"bot_vpn/internal/utils"
+	"encoding/json"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
@@ -111,6 +112,7 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 	userID := callback.From.ID
 	chatID := callback.Message.Chat.ID
 	userName := callback.From.UserName
+	reqMount := utils.GetMonthString(month)
 
 	//Текст сообщения с информацией о тарифе
 	text := fmt.Sprintf(
@@ -118,14 +120,18 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 			"Вы выбрали тариф на %s. 💎 \n"+
 			"Стоимость: %d рублей. 💳 \n"+
 			"После оплаты ключ будет сгенерирован и отправлен автоматически. 🔑\n",
-		utils.GetMonthString(month), price,
+		reqMount, price,
 	)
 
-	// Генерация ссылки на оплату с добавлением метаданных пользователя
-	paymentLink := fmt.Sprintf(
-		"https://example.com/payment?months=%d&price=%d&user_id=%d",
-		month, price, userID, // TODO: с user_id разобраться
-	)
+	// преобразуем в строки
+	strPrice := strconv.Itoa(price)
+	strUserID := strconv.Itoa(int(userID))
+
+	// формируем url для оплаты
+	paymentLink, err := m.CreatePayment(strPrice, strUserID, reqMount)
+	if err != nil {
+		return
+	}
 
 	// Кнопка для перехода на ссылку оплаты
 	button := tgbotapi.NewInlineKeyboardButtonURL(fmt.Sprintf("Оплатить %d RUB 💳", price), paymentLink)
@@ -164,41 +170,86 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 			fmt.Sprintf("%d", userID),
 			fmt.Sprintf("%d", chatID),
 			ttl,
-		) // TODO: user_id: struct{}(можно в редис писать только 1 параметр) - userID & chatID равны
+		)
 		if err != nil {
 			return
 		}
 	}
 }
 
-// ManageUserKeyAfterPayment обрабатывает оплату пользователя и управляет его ключом доступа.
-func (m *MessengerBot) ManageUserKeyAfterPayment(metadata entities.MetaData) {
-	const op = "internal/bot/messages.go/ManageUserKeyAfterPayment"
+func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string, error) {
+	const op = "internal/bot/messages.go/CreatePayment"
 
-	intUserID, err := strconv.ParseInt(metadata.Metadata.UserID, 10, 64)
+	// Получаем shopID и secretKey из ENV
+	shopID := os.Getenv("YK_SHOP_ID")
+	secretKey := os.Getenv("YK_SECRET_KEY")
+
+	if shopID == "" || secretKey == "" {
+		err := fmt.Errorf("shopID или secretKey не заданы в .env")
+		slog.Error(op, err)
+		return "", err
+	}
+
+	// Формируем тело запроса
+	requestData := entities.PaymentRequest{
+		Capture:     true,
+		Description: "Оплата подписки на " + reqMount,
+		Amount: entities.Amount{
+			Value:    amount,
+			Currency: "RUB",
+		},
+		Confirmation: entities.Confirmation{
+			Type:      "redirect",
+			ReturnURL: "https://meet.google.com/sju-ktir-vze",
+		},
+		Metadata: map[string]string{
+			"user_tg_id": tgUserID,
+		},
+	}
+
+	jsonData, err := json.Marshal(requestData)
 	if err != nil {
-		slog.Error(op, "Ошибка при преобразовании строки в int64", slog.String("error", err.Error()))
-		return
+		slog.Error("ошибка преобразования в json")
+		return "", err
 	}
 
-	exists, err := m.repo.IsUserInDB(intUserID)
-	if err == nil && exists {
-
-		//m.repo.UpdateKeyExpiration(intUserID)
-		// Если пользователь существует в базе данных, можем выполнить логику для обновления данных или продолжить выполнение программы.
-		// В противном случае, если пользователя нет, добавляем нового пользователя со всеми данными.
-	} else {
-		// Если пользователя нет в базе данных или произошла ошибка при запросе, выполняем логику добавления нового пользователя.
-		// Это может быть добавление нового пользователя в базу данных или сохранение его временно в Redis, как обсуждалось ранее.
+	// Отправляем запрос
+	paymentURL, err := m.httpRequest.GetPaymentURL(jsonData, shopID, secretKey, tgUserID)
+	if err != nil {
+		return "", err
 	}
-	// Функция выполняет следующие шаги:
-	// 1. Проверяет, существует ли пользователь в базе данных:
-	//    - Если пользователь существует, обновляет время истечения его ключа доступа в соответствии с продлённой подпиской.
-	//    - Если пользователь не найден, создаёт новую запись в базе данных с необходимыми данными.
-	// 2. Генерирует или обновляет ключ доступа для пользователя.
-	// 3. Отправляет обновлённый или вновь созданный ключ доступа пользователю.
 
+	return paymentURL, nil
 }
+
+// ManageUserKeyAfterPayment обрабатывает оплату пользователя и управляет его ключом доступа.
+//func (m *MessengerBot) ManageUserKeyAfterPayment(metadata entities.MetaData) {
+//	const op = "internal/bot/messages.go/ManageUserKeyAfterPayment"
+//
+//	intUserID, err := strconv.ParseInt(metadata.Metadata.UserID, 10, 64)
+//	if err != nil {
+//		slog.Error(op, "Ошибка при преобразовании строки в int64", slog.String("error", err.Error()))
+//		return
+//	}
+//
+//	exists, err := m.repo.IsUserInDB(intUserID)
+//	if err == nil && exists {
+//
+//		//m.repo.UpdateKeyExpiration(intUserID)
+//		// Если пользователь существует в базе данных, можем выполнить логику для обновления данных или продолжить выполнение программы.
+//		// В противном случае, если пользователя нет, добавляем нового пользователя со всеми данными.
+//	} else {
+//		// Если пользователя нет в базе данных или произошла ошибка при запросе, выполняем логику добавления нового пользователя.
+//		// Это может быть добавление нового пользователя в базу данных или сохранение его временно в Redis, как обсуждалось ранее.
+//	}
+//	// Функция выполняет следующие шаги:
+//	// 1. Проверяет, существует ли пользователь в базе данных:
+//	//    - Если пользователь существует, обновляет время истечения его ключа доступа в соответствии с продлённой подпиской.
+//	//    - Если пользователь не найден, создаёт новую запись в базе данных с необходимыми данными.
+//	// 2. Генерирует или обновляет ключ доступа для пользователя.
+//	// 3. Отправляет обновлённый или вновь созданный ключ доступа пользователю.
+//
+//}
 
 // TimeFunction - врEменная функция
 func (m *MessengerBot) TimeFunction(update tgbotapi.Update) {
