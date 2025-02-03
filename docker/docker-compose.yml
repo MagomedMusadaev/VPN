@@ -8,7 +8,7 @@ services:
       dockerfile: docker/Dockerfile  # Путь к Dockerfile
     container_name: bot-vpn
     ports:
-      - "8080:8080"  # Если приложение использует HTTP-сервер
+      - "8085:8085"  # Если приложение использует HTTP-сервер
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
       - API_URL=${API_URL}
