@@ -59,7 +59,6 @@ func (h *HttpHandler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		} else {
 			slog.Info("user_tg_id не найден")
 		}
-
 	case "payment.canceled":
 		// Обрабатываем отменённый платёж
 		slog.Info("payment.canceled:", event)
@@ -68,6 +67,8 @@ func (h *HttpHandler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		} else {
 			slog.Info("user_tg_id не найден")
 		}
+	default:
+		slog.Info("Неизвустный ответ:", event)
 	}
 
 	//switch event.Status {
