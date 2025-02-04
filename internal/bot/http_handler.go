@@ -50,51 +50,20 @@ func (h *HttpHandler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch event.Status {
+	switch event.Event {
 	case "payment.succeeded":
 		// Обрабатываем успешный платёж
-		slog.Info("payment.succeeded:", event)
-		if userTgID, ok := event.Metadata["user_tg_id"]; ok {
-			slog.Info("user_tg_id:", userTgID)
-		} else {
-			slog.Info("user_tg_id не найден")
+		slog.Info("payment.succeeded:", event.Object.Metadata["user_tg_id"])
+		if event.Object.Status == "succeeded" {
+			// вызываем сервис слой
+			h.messenger.ManageUserDataAfterPayment(event.Object.Amount.Value, event.Object.Metadata["user_tg_id"])
 		}
 	case "payment.canceled":
 		// Обрабатываем отменённый платёж
-		slog.Info("payment.canceled:", event)
-		if userTgID, ok := event.Metadata["user_tg_id"]; ok {
-			slog.Info("user_tg_id:", userTgID)
-		} else {
-			slog.Info("user_tg_id не найден")
-		}
+		slog.Info("payment.canceled:", event.Object.Metadata["user_tg_id"])
+		return
 	default:
-		slog.Info("Неизвустный ответ:", event)
+		slog.Info("Неизвестный ответ:", event.Object.Metadata["user_tg_id"])
+		return
 	}
-
-	//switch event.Status {
-	//case "payment.succeeded":
-	//	// Обрабатываем успешный платёж
-	//	//processSuccessfulPayment(event.Object)
-	//
-	//	slog.Info("payment.succeeded:", event)
-	//	slog.Info("payment.succeeded:", event.Metadata["user_tg_id"])
-	//
-	//case "payment.canceled":
-	//	// Обрабатываем отменённый платёж
-	//	//processCancelledPayment(event.Object)
-	//
-	//	slog.Info("payment.succeeded:", event)
-	//	slog.Info("payment.succeeded:", event.Metadata["user_tg_id"])
-	//
-	//// Добавьте другие обработчики для других типов событий
-	//default:
-	//	http.Error(w, "Неизвестный тип события", http.StatusBadRequest)
-	//}
-
-	// Логика обработки платежа
-	// 1. Проверяем наличие пользователя в БД
-
-	//h.messenger.ManageUserKeyAfterPayment(metadata)
-
-	// 2. Если пользователя нет, получаем данные из Redis, создаём нового пользователя и возвращаем ключ.
 }

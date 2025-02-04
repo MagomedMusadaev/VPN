@@ -4,6 +4,7 @@ import (
 	"bot_vpn/internal/entities"
 	"bot_vpn/internal/utils"
 	"encoding/json"
+	"errors"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
@@ -109,7 +110,7 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 	}
 
 	// Получение уникального идентификатора пользователя
-	userID := callback.From.ID
+	userID := int(callback.From.ID)
 	chatID := callback.Message.Chat.ID
 	userName := callback.From.UserName
 	reqMount := utils.GetMonthString(month)
@@ -125,7 +126,7 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 
 	// преобразуем в строки
 	strPrice := strconv.Itoa(price)
-	strUserID := strconv.Itoa(int(userID))
+	strUserID := strconv.Itoa(userID)
 
 	// формируем url для оплаты
 	paymentLink, err := m.CreatePayment(strPrice, strUserID, reqMount)
@@ -152,31 +153,9 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 		"userID", userID,
 		"userName", userName,
 	)
-
-	// Проверяем наличие пользователя в БД
-	exists, err := m.repo.IsUserInDB(userID)
-	if err != nil {
-		return
-	}
-
-	// Если пользователь не найден в БД, добавляем его временно в Redis
-	if !exists {
-		slog.Info("Пользователь не найден в db, добавляем в Redis:",
-			"userID", userID,
-			"userName", userName,
-		)
-
-		err = m.repo.AddUserToRedis(
-			fmt.Sprintf("%d", userID),
-			fmt.Sprintf("%d", chatID),
-			ttl,
-		)
-		if err != nil {
-			return
-		}
-	}
 }
 
+// CreatePayment - формирует ссылку на оплату с metadata для ЮКассы
 func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string, error) {
 	const op = "internal/bot/messages.go/CreatePayment"
 
@@ -200,7 +179,7 @@ func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string,
 		},
 		Confirmation: entities.Confirmation{
 			Type:      "redirect",
-			ReturnURL: "https://meet.google.com/sju-ktir-vze",
+			ReturnURL: "https://zvuk.com/track/50970977",
 		},
 		Metadata: map[string]string{
 			"user_tg_id": tgUserID,
@@ -222,34 +201,142 @@ func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string,
 	return paymentURL, nil
 }
 
-// ManageUserKeyAfterPayment обрабатывает оплату пользователя и управляет его ключом доступа.
-//func (m *MessengerBot) ManageUserKeyAfterPayment(metadata entities.MetaData) {
-//	const op = "internal/bot/messages.go/ManageUserKeyAfterPayment"
-//
-//	intUserID, err := strconv.ParseInt(metadata.Metadata.UserID, 10, 64)
-//	if err != nil {
-//		slog.Error(op, "Ошибка при преобразовании строки в int64", slog.String("error", err.Error()))
-//		return
-//	}
-//
-//	exists, err := m.repo.IsUserInDB(intUserID)
-//	if err == nil && exists {
-//
-//		//m.repo.UpdateKeyExpiration(intUserID)
-//		// Если пользователь существует в базе данных, можем выполнить логику для обновления данных или продолжить выполнение программы.
-//		// В противном случае, если пользователя нет, добавляем нового пользователя со всеми данными.
-//	} else {
-//		// Если пользователя нет в базе данных или произошла ошибка при запросе, выполняем логику добавления нового пользователя.
-//		// Это может быть добавление нового пользователя в базу данных или сохранение его временно в Redis, как обсуждалось ранее.
-//	}
-//	// Функция выполняет следующие шаги:
-//	// 1. Проверяет, существует ли пользователь в базе данных:
-//	//    - Если пользователь существует, обновляет время истечения его ключа доступа в соответствии с продлённой подпиской.
-//	//    - Если пользователь не найден, создаёт новую запись в базе данных с необходимыми данными.
-//	// 2. Генерирует или обновляет ключ доступа для пользователя.
-//	// 3. Отправляет обновлённый или вновь созданный ключ доступа пользователю.
-//
-//}
+// ManageUserDataAfterPayment - обрабатывает оплату пользователя и управляет его данными.
+func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
+	const op = "internal/bot/messages.go/ManageUserKeyAfterPayment"
+
+	intUserID, err := strconv.Atoi(userTgID)
+	if err != nil {
+		slog.Error(op, "Ошибка при преобразовании строки в int", err)
+		return
+	}
+
+	var expirationTime time.Duration
+	switch value {
+	case "100,00": // 1 месяц
+		expirationTime = 30 * 24 * time.Hour
+	case "190,00": // 2 месяца
+		expirationTime = 60 * 24 * time.Hour
+	case "270,00": // 3 месяца
+		expirationTime = 90 * 24 * time.Hour
+	case "490,00": // 6 месяцев
+		expirationTime = 180 * 24 * time.Hour
+	default:
+		slog.Error(op, "Неизвестная сумма оплаты", "value", value)
+		return
+	}
+
+	// Проверяем наличие пользователя в db
+	exists, err := m.repo.IsUserInDB(intUserID)
+	if err != nil {
+		return
+	}
+
+	// Если пользователь не найден в db
+	if !exists {
+		// Создаём пользователя в таблице users
+		user := &entities.User{
+			UserTgID:     intUserID,
+			ChatTgID:     intUserID,
+			ReferralCode: "abs", // Если есть реферальный код, указываем его
+			CreatedAt:    time.Now(),
+			ReferredBy:   0, // Если пользователь был приглашён, указываем ID пригласившего
+			//TODO: надо будет в db 0 id скипнуть
+		}
+
+		if err = m.repo.CreateUser(user); err != nil {
+			slog.Error(op, "Ошибка при создании пользователя в базе данных", err)
+			return
+		}
+
+		// Генерируем ключ и сохраняем его в таблице keys
+		key, err := m.GenerateKey(userTgID)
+		if err != nil && key == "" {
+			return
+		}
+
+		keyRecord := &entities.Key{
+			UserTgID:  intUserID,
+			Key:       key,
+			CreatedAt: time.Now(),
+			ExpiresAt: time.Now().Add(expirationTime),
+		}
+
+		if err = m.repo.SaveUserKey(keyRecord); err != nil {
+			return
+		}
+
+		slog.Info("Пользователь и ключ успешно добавлены", "userID", intUserID, "key", key)
+		return
+	}
+
+	// Если пользователь найден в db, то
+	expiresAt, err := m.repo.GetExpirationTimeKey(intUserID)
+	if err != nil {
+		return
+	}
+
+	var newExpiration time.Time
+	now := time.Now()
+
+	if now.After(expiresAt) {
+		// Если срок истёк, начинаем с текущего времени
+		newExpiration = now.Add(expirationTime)
+	} else {
+		// Если подписка ещё активна, прибавляем к текущему сроку
+		newExpiration = expiresAt.Add(expirationTime)
+	}
+
+	if err = m.repo.UpdateKeyExpiration(intUserID, newExpiration); err != nil {
+		return
+	}
+
+	slog.Info("Срок действия ключа успешно обновлён", slog.Int("user_id", intUserID), slog.Time("new_expires_at", newExpiration))
+}
+
+// GenerateKey - функция генерации ключа
+func (m *MessengerBot) GenerateKey(userTgID string) (string, error) {
+	const op = "internal/bot/messages.go/GetKey"
+
+	apiURL := os.Getenv("API_URL") // url сервера с outline
+	if apiURL == "" {
+		slog.Warn(op, "API_URL пуст")
+		return "", errors.New("")
+	}
+
+	payload := entities.NewKeyPayload(userTgID)
+	slog.Info("Payload created",
+		"userID:", userTgID,
+		"time:", time.Now(),
+	)
+
+	key, err := m.httpRequest.SendKeyRequest(apiURL, payload)
+	if err != nil {
+		return "", err
+	}
+
+	// Формируем сообщение с ключом
+	text := fmt.Sprintf("Ваш ключ доступа:\n```%s```", key)
+
+	chatID, err := strconv.ParseInt(userTgID, 10, 64)
+	if err != nil {
+		slog.Error(op, "ошибка парсинга userTgID", err)
+		return key, err
+	}
+
+	// Отправляем сообщение
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+
+	if _, err = m.botAPI.Send(msg); err != nil {
+		slog.Error(op, "Failed to send message")
+		return key, err
+	}
+
+	slog.Info("key sent successfully", userTgID)
+
+	return key, nil
+}
 
 // TimeFunction - врEменная функция
 func (m *MessengerBot) TimeFunction(update tgbotapi.Update) {
@@ -258,43 +345,4 @@ func (m *MessengerBot) TimeFunction(update tgbotapi.Update) {
 	if _, err := m.botAPI.Send(msg); err != nil {
 		return
 	}
-}
-
-// нужно полностью переделать эту функцию (пока для тестинга)
-func (m *MessengerBot) GetKey(update tgbotapi.Update) {
-	const op = "internal/bot/messages.go/GetKey"
-
-	apiURL := os.Getenv("API_URL") // url сервера с outline
-	if apiURL == "" {
-		slog.Warn(op, "API_URL пуст")
-		return
-	}
-
-	userID := update.Message.From.ID
-	strUserID := strconv.Itoa(int(userID))
-
-	payload := entities.NewKeyPayload(strUserID)
-	slog.Info("Payload created",
-		"userID:", userID,
-		"time:", time.Now(),
-	)
-
-	key, err := m.httpRequest.SendKeyRequest(apiURL, payload)
-	if err != nil {
-		return
-	}
-
-	// Формируем сообщение с ключом
-	text := fmt.Sprintf("Ваш ключ доступа:\n```%s```", key)
-
-	// Отправляем сообщение
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
-	msg.ParseMode = "Markdown"
-
-	if _, err := m.botAPI.Send(msg); err != nil {
-		slog.Error(op, "Failed to send message")
-		return
-	}
-
-	slog.Info("key sent successfully", userID)
 }

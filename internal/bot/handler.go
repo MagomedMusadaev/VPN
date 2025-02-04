@@ -45,8 +45,8 @@ func (h *CallbackHandler) Message(update tgbotapi.Update) {
 	switch update.Message.Text {
 	case "/start":
 		h.messenger.GetInfoStart(update)
-	case "/daykey":
-		h.messenger.GetKey(update)
+	//case "/daykey":
+	//	h.messenger.GetKey(update)
 	case "/connect_str":
 		h.messenger.TimeFunction(update)
 	case "/instruction":

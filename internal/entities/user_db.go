@@ -2,33 +2,28 @@ package entities
 
 import "time"
 
-// User представляет пользователя в системе Telegram и связанную с ним информацию о ключах.
+// User - структура для хранения данны пользователя
 type User struct {
-	UserTgID      int64     `json:"user_tg_id" db:"user_tg_id"`           // Telegram ID пользователя
-	KeyID         int       `json:"key_id" db:"key_id"`                   // ID ключа в системе Outline Manager
-	Key           string    `json:"key" db:"key"`                         // Ключ подключения
-	KeyStatus     string    `json:"key_status" db:"key_status"`           // Статус ключа (например, активен, истёк, ограничен)
-	KeyStartDate  time.Time `json:"key_start_date" db:"key_start_date"`   // Дата начала действия ключа
-	KeyExpiryDate time.Time `json:"key_expiry_date" db:"key_expiry_date"` // Дата истечения действия ключа
-	CreatedAt     time.Time `json:"created_at" db:"created_at"`           // Дата первой записи данных пользователя
+	UserTgID     int       `db:"telegram_id"` // Telegram ID пользователя
+	ChatTgID     int       `db:"chat_id"`     // Telegram ID пользователя
+	ReferralCode string    `db:"referral_code"`
+	CreatedAt    time.Time `db:"created_at"` // Дата первой записи данных пользователя
+	ReferredBy   int       `db:"referred_by"`
 }
 
 // NewUser - конструктор для User
 func NewUser(
-	userTgID int64,
-	keyID int, key,
-	keyStatus string,
-	KeyStartDate,
-	KeyExpiryDate,
-	CreatedAt time.Time,
+	userTgID int,
+	chatID int,
+	referralCode string,
+	createdAt time.Time,
+	referredBy int,
 ) User {
 	return User{
-		UserTgID:      userTgID,
-		KeyID:         keyID,
-		Key:           key,
-		KeyStatus:     keyStatus,
-		KeyStartDate:  KeyExpiryDate,
-		KeyExpiryDate: KeyStartDate,
-		CreatedAt:     CreatedAt,
+		UserTgID:     userTgID,
+		ChatTgID:     chatID,
+		ReferralCode: referralCode,
+		CreatedAt:    createdAt,
+		ReferredBy:   referredBy,
 	}
 }

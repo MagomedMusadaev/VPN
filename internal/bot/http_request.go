@@ -87,6 +87,7 @@ func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload)
 	return respBody.Key, nil
 }
 
+// GetPaymentURL - функци генерации ссылки оплаты на ЮКасса.
 func (h *HttpRequest) GetPaymentURL(jsonData []byte, shopID, secretKey, tgUserID string) (string, error) {
 	const op = "internal/bot/http_request/GetPaymentURL"
 
