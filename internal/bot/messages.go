@@ -213,13 +213,13 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 
 	var expirationTime time.Duration
 	switch value {
-	case "100,00": // 1 месяц
+	case "100.00": // 1 месяц
 		expirationTime = 30 * 24 * time.Hour
-	case "190,00": // 2 месяца
+	case "190.00": // 2 месяца
 		expirationTime = 60 * 24 * time.Hour
-	case "270,00": // 3 месяца
+	case "270.00": // 3 месяца
 		expirationTime = 90 * 24 * time.Hour
-	case "490,00": // 6 месяцев
+	case "490.00": // 6 месяцев
 		expirationTime = 180 * 24 * time.Hour
 	default:
 		slog.Error(op, "Неизвестная сумма оплаты", "value", value)

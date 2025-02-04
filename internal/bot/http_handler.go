@@ -41,7 +41,7 @@ func (h *HttpHandler) PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Логируем тело запроса для отладки
-	slog.Info(op, "Получена полезная нагрузка", slog.String("payload", string(body)))
+	slog.Info("Получена полезная нагрузка", slog.String("payload", string(body)))
 
 	// Распаковываем JSON в структуру MetaData
 	var event entities.Event
