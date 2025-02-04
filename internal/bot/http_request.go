@@ -52,7 +52,7 @@ func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload)
 	}
 
 	// Создание нового HTTP-запроса.
-	req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewBuffer(payloadBytes))
+	req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewBuffer(payloadBytes)) // изменил url
 	if err != nil {
 		slog.Error(op, "Ошибка создания HTTP-запроса", slog.String("error", err.Error()))
 		return "", err
