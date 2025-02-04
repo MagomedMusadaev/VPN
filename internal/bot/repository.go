@@ -33,16 +33,17 @@ func (r *Repo) IsUserInDB(userID int) (bool, error) {
 
 	var count int
 	err := r.db.QueryRow(query, userID).Scan(&count)
-	if err != nil {
-		// Если ошибка — проверяем, относится ли она к отсутствию строк.
-		if err == sql.ErrNoRows {
-			slog.Warn("Пользователь не найден в базе", slog.Int("userID", userID))
-			return false, nil
-		}
-		// Логируем ошибку выполнения запроса.
-		slog.Error(op, "Ошибка при проверке пользователя в базе", slog.Int("userID", userID), slog.String("error", err.Error()))
-		return false, err
-	}
+	_ = err
+	//if err != nil {
+	//	// Если ошибка — проверяем, относится ли она к отсутствию строк.
+	//	if err == sql.ErrNoRows {
+	//		slog.Warn("Пользователь не найден в базе", slog.Int("userID", userID))
+	//		return false, nil
+	//	}
+	//	// Логируем ошибку выполнения запроса.
+	//	slog.Error(op, "Ошибка при проверке пользователя в базе", slog.Int("userID", userID), slog.String("error", err.Error()))
+	//	return false, err
+	//}
 
 	// Логируем успешную проверку
 	slog.Info("Проверка пользователя в базе", slog.Int("userID", userID), slog.Bool("exists", count > 0))
