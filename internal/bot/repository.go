@@ -29,7 +29,7 @@ func (r *Repo) IsUserInDB(userID int) (bool, error) {
 	const op = "internal/bot/repository.go/IsUserInDB"
 
 	// SQL запрос для проверки наличия пользователя в базе данных по userID.
-	query := "SELECT COUNT(1) FROM vpn WHERE user_id = $1"
+	query := "SELECT COUNT(1) FROM users WHERE telegram_id = $1"
 
 	var count int
 	err := r.db.QueryRow(query, userID).Scan(&count)
@@ -87,7 +87,7 @@ func (r *Repo) GetExpirationTimeKey(userTgID int) (time.Time, error) {
 	const op = "internal/bot/repository.go/GetExpirationTimeKey"
 
 	var expiresAt time.Time
-	query := `SELECT expires_at FROM keys WHERE user_id = $1`
+	query := `SELECT expires_at FROM public.keys WHERE user_id = $1`
 
 	err := r.db.QueryRow(query, userTgID).Scan(&expiresAt)
 	if err != nil {
@@ -101,9 +101,9 @@ func (r *Repo) GetExpirationTimeKey(userTgID int) (time.Time, error) {
 func (r *Repo) UpdateKeyExpiration(userTgID int, newExpiration time.Time) error {
 	const op = "internal/bot/repository.go/UpdateKeyExpiration"
 
-	query := `INSERT INTO keys (expires_at) VALUES($1) WHERE user_id = $2 `
+	query := `UPDATE keys SET expires_at = $1 WHERE user_id = $2`
 
-	_, err := r.db.Exec(query, userTgID, newExpiration)
+	_, err := r.db.Exec(query, newExpiration, userTgID)
 	if err != nil {
 		slog.Error(op, slog.String("error", err.Error()))
 		return err

@@ -3,12 +3,14 @@ package bot
 import (
 	"bot_vpn/internal/entities"
 	"bot_vpn/internal/utils"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"log/slog"
+	"math/rand"
 	"os"
 	"strconv"
 	"time"
@@ -221,9 +223,6 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		expirationTime = 90 * 24 * time.Hour
 	case "490.00": // 6 месяцев
 		expirationTime = 180 * 24 * time.Hour
-	default:
-		slog.Error(op, "Неизвестная сумма оплаты", "value", value)
-		return
 	}
 
 	// Проверяем наличие пользователя в db
@@ -234,11 +233,17 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 
 	// Если пользователь не найден в db
 	if !exists {
+
+		// временная шляпа
+		b := make([]byte, 4)
+		_, err = rand.Read(b)
+		refCode := base64.URLEncoding.EncodeToString(b)[:6] // Берём первые 6 символов
+
 		// Создаём пользователя в таблице users
 		user := &entities.User{
 			UserTgID:     intUserID,
 			ChatTgID:     intUserID,
-			ReferralCode: "abs", // Если есть реферальный код, указываем его
+			ReferralCode: refCode, // Если есть реферальный код, указываем его
 			CreatedAt:    time.Now(),
 			ReferredBy:   0, // Если пользователь был приглашён, указываем ID пригласившего
 			//TODO: надо будет в db 0 id скипнуть
