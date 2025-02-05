@@ -269,7 +269,7 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		// Формируем тело ключа для записи в базу
 		keyRecord := &entities.Key{
 			UserTgID:  intUserID,
-			Key:       key,
+			Key:       key + "#KeeperVPN",
 			CreatedAt: time.Now(),
 			ExpiresAt: time.Now().Add(expirationTime),
 		}
