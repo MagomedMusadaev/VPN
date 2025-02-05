@@ -9,7 +9,13 @@ import (
 )
 
 type RepoInt interface {
-	IsUserInDB(userID int64) (bool, error)
+	IsUserInDB(userID int) (bool, error)
+	CreateUser(user *entities.User) error
+	SaveUserKey(key *entities.Key) error
+	GetExpirationTimeKey(userTgID int) (time.Time, error)
+	UpdateKeyExpiration(userTgID int, newExpiration time.Time) error
+	GetConnectionKey(userTgID int) (string, error)
+	GetConnectKeyOrReferral(userTgID int64, referral bool) (string, error)
 }
 
 type Repo struct {
@@ -28,31 +34,30 @@ func NewRepo(db *sql.DB, client *redis.Client) *Repo {
 func (r *Repo) IsUserInDB(userID int) (bool, error) {
 	const op = "internal/bot/repository.go/IsUserInDB"
 
-	// SQL запрос для проверки наличия пользователя в базе данных по userID.
 	query := "SELECT COUNT(1) FROM users WHERE telegram_id = $1"
 
 	var count int
 	err := r.db.QueryRow(query, userID).Scan(&count)
-	_ = err
-	//if err != nil {
-	//	// Если ошибка — проверяем, относится ли она к отсутствию строк.
-	//	if err == sql.ErrNoRows {
-	//		slog.Warn("Пользователь не найден в базе", slog.Int("userID", userID))
-	//		return false, nil
-	//	}
-	//	// Логируем ошибку выполнения запроса.
-	//	slog.Error(op, "Ошибка при проверке пользователя в базе", slog.Int("userID", userID), slog.String("error", err.Error()))
-	//	return false, err
-	//}
+	if err != nil {
+		// Если ошибка — проверяем, относится ли она к отсутствию строк.
+		if err == sql.ErrNoRows {
+			// Пользователь не найден, логируем это событие.
+			slog.Warn(op, "Пользователь не найден в базе", slog.Int("userID", userID))
+			return false, nil
+		}
+		// Логируем ошибку выполнения запроса.
+		slog.Error(op, "Ошибка при проверке пользователя в базе", slog.Int("userID", userID), slog.String("error", err.Error()))
+		return false, err
+	}
 
-	// Логируем успешную проверку
-	slog.Info("Проверка пользователя в базе", slog.Int("userID", userID), slog.Bool("exists", count > 0))
+	// Логируем успешную проверку: найден ли пользователь в базе.
+	slog.Info(op, "Проверка пользователя в базе", slog.Int("userID", userID), slog.Bool("exists", count > 0))
 
 	// Если count > 0, значит пользователь существует в базе.
 	return count > 0, nil
 }
 
-// CreateUser - функция записи нового пользователя в db.
+// CreateUser - функция записи нового пользователя в базу данных.
 func (r *Repo) CreateUser(user *entities.User) error {
 	const op = "internal/bot/repository.go/CreateUser"
 
@@ -67,7 +72,7 @@ func (r *Repo) CreateUser(user *entities.User) error {
 	return nil
 }
 
-// SaveUserKey - функция записи нового ключа в db.
+// SaveUserKey - функция записи нового ключа в базу данных.
 func (r *Repo) SaveUserKey(key *entities.Key) error {
 	const op = "internal/bot/repository.go/SaveUserKey"
 
@@ -98,6 +103,7 @@ func (r *Repo) GetExpirationTimeKey(userTgID int) (time.Time, error) {
 	return expiresAt, nil
 }
 
+// UpdateKeyExpiration - функция обновления времени истечения ключа пользователя.
 func (r *Repo) UpdateKeyExpiration(userTgID int, newExpiration time.Time) error {
 	const op = "internal/bot/repository.go/UpdateKeyExpiration"
 
@@ -112,67 +118,36 @@ func (r *Repo) UpdateKeyExpiration(userTgID int, newExpiration time.Time) error 
 	return nil
 }
 
-//func (r *Repo) UpdateKeyExpiration(userID int64) error {
-//	query := "UPDATE vpn SET key_expiration_date = NOW() + (добавить как-то время для ключа по выбранному тарифу) WHERE user_tg_id = $1"
-//	_, err := r.db.Exec(query, userID)
-//	return err
-//}
+// GetConnectKeyOrReferral - функция для выдачи существующего ключа подключения.
+func (r *Repo) GetConnectKeyOrReferral(userTgID int64, referral bool) (string, error) {
+	const op = "internal/bot/repository.go/GetConnectionKey"
 
-// AddUserToRedis - добавляет пользователя в Redis на временное хранение.
-//func (r *Repo) AddUserToRedis(userID, chatID string, ttl time.Duration) error {
-//	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-//	defer cancel()
-//
-//	// Попытка установить значение в Redis по ключу userID с временем жизни ttl.
-//	err := r.client.Set(ctx, userID, chatID, ttl).Err()
-//	if err != nil {
-//		slog.Error("Ошибка при записи данных в Redis", slog.String("error", err.Error()))
-//		return err
-//	}
-//	slog.Info("Пользователь успешно добавлен в Redis до оплаты:", slog.String("userID", userID))
-//
-//	return nil
-//}
+	// переменная для хранения запроса
+	var query string
 
-// CheckRedisUserData - проверяет наличие пользователя в Redis.
-//func (r *Repo) CheckRedisUserData(userTgID string) (string, error) {
-//	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-//	defer cancel()
-//
-//	//
-//	chatID, err := r.client.Get(ctx, userTgID).Result()
-//	if err == redis.Nil {
-//		slog.Warn("Данные в Redis не найдены", slog.String("key", userTgID))
-//		return "", nil // Отсутствие данных — не ошибка
-//	}
-//	if err != nil {
-//		slog.Error("Ошибка при  данных в Redis", slog.String("error", err.Error()))
-//		return "", err
-//	}
-//
-//	return chatID, nil
-//}
+	// Формируем базовый запрос
+	if referral {
+		query = `SELECT referral_code FROM users WHERE telegram_id = $1`
+	} else {
+		query = `SELECT key FROM keys WHERE user_id = $1`
+	}
 
-//// GetUserFromRedis получает значение chatID по ключу userID из Redis.
-//func (r *Repo) GetUserFromRedis(userID string) (string, error) {
-//	const op = "internal/bot/repository.go/GetUserFromRedis"
-//
-//	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-//	defer cancel()
-//
-//	// Попытка получить значение chatID из Redis по ключу userID.
-//	chatID, err := r.client.Get(ctx, userID).Result()
-//	if err != nil {
-//		// Если ошибка Redis.Nil, то ключ не существует в Redis, возвращаем пустую строку и nil.
-//		if err == redis.Nil {
-//			return "", nil
-//		}
-//		slog.Error(op, "Ошибка при чтении данных из Redis", slog.String("error", err.Error()))
-//		return "", err
-//	}
-//
-//	// Логируем успешное получение данных для пользователя.
-//	slog.Info("Пользователь успешно найден в Redis", slog.String("userID", userID))
-//
-//	return chatID, nil
-//}
+	var connectionKeyOrReferral string
+	err := r.db.QueryRow(query, userTgID).Scan(&connectionKeyOrReferral)
+
+	// Проверяем, если ошибка - это отсутствие строк
+	if err == sql.ErrNoRows {
+		// Логируем, что ключ не найден
+		slog.Info("Ключ подключения для пользователя не найден", slog.Int64("userID", userTgID))
+		return "", nil
+	}
+
+	// Если ошибка другая, логируем её
+	if err != nil {
+		slog.Error(op, "Ошибка при получении ключа подключения", slog.Int64("userID", userTgID), slog.String("error", err.Error()))
+		return "", err
+	}
+
+	// Возвращаем полученный ключ подключения
+	return connectionKeyOrReferral, nil
+}

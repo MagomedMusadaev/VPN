@@ -14,6 +14,7 @@ import (
 
 type HttpRequestInt interface {
 	SendKeyRequest(apiURL string, payload entities.KeyPayload) (string, error)
+	GetPaymentURL(jsonData []byte, shopID, secretKey, tgUserID string) (string, error)
 }
 
 type HttpRequest struct {
@@ -52,7 +53,7 @@ func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload)
 	}
 
 	// Создание нового HTTP-запроса.
-	req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewBuffer(payloadBytes)) // изменил url
+	req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		slog.Error(op, "Ошибка создания HTTP-запроса", slog.String("error", err.Error()))
 		return "", err
@@ -77,7 +78,7 @@ func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload)
 	}
 
 	// Распаковка ответа.
-	var respBody entities.RespBody
+	var respBody entities.RespBodyKey
 	if err = json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
 		slog.Error(op, "Ошибка декодирования тела ответа", slog.String("error", err.Error()))
 		return "", err
@@ -91,53 +92,57 @@ func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload)
 func (h *HttpRequest) GetPaymentURL(jsonData []byte, shopID, secretKey, tgUserID string) (string, error) {
 	const op = "internal/bot/http_request/GetPaymentURL"
 
+	// URL для запроса.
 	url := "https://api.yookassa.ru/v3/payments"
 
+	// Создание HTTP-запроса.
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		slog.Error(op, err)
-		return "", err
+		slog.Error(op, "Ошибка создания HTTP-запроса", slog.String("error", err.Error()))
+		return "", fmt.Errorf("%s: ошибка создания запроса: %w", op, err)
 	}
 
-	// генерируем уникальный ключ оплаты
+	// Генерация уникального ключа для idempotence.
 	idempotenceKey := fmt.Sprintf("payment-%d", time.Now().UnixNano())
 
-	// Устанавливаем заголовки
+	// Устанавливаем заголовки запроса.
 	req.SetBasicAuth(shopID, secretKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotence-Key", idempotenceKey) // Уникальный ключ для повторных запросов
+	req.Header.Set("Idempotence-Key", idempotenceKey) // Уникальный ключ для повторных запросов.
 
-	// Отправляем запрос
+	// Отправляем запрос.
 	client := &http.Client{
-		Timeout: 30 * time.Second, // тайм-аут до 30 секунд
+		Timeout: 30 * time.Second, // Устанавливаем тайм-аут до 30 секунд.
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		slog.Error(op, err)
+		slog.Error(op, "Ошибка выполнения запроса", slog.String("error", err.Error()))
 		return "", err
 	}
 	defer resp.Body.Close()
 
-	// Проверяем статус код
+	// Проверка статуса ответа.
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		// Логируем тело ответа для диагностики
+		// Логируем тело ответа для диагностики.
 		body, _ := io.ReadAll(resp.Body)
 		slog.Error(fmt.Sprintf("%s: неожиданный статус код: %d, тело ответа: %s", op, resp.StatusCode, string(body)))
 		return "", fmt.Errorf("%s: неожиданный статус код: %d", op, resp.StatusCode)
 	}
 
-	// Декодируем ответ
+	// Декодируем ответ в структуру.
 	var paymentResponse entities.PaymentResponse
-	if err := json.NewDecoder(resp.Body).Decode(&paymentResponse); err != nil {
-		slog.Error(op, err)
+	if err = json.NewDecoder(resp.Body).Decode(&paymentResponse); err != nil {
+		slog.Error(op, "Ошибка декодирования ответа", slog.String("error", err.Error()))
 		return "", err
 	}
 
+	// Проверка наличия ссылки на оплату.
 	if paymentResponse.Confirmation.ConfirmationURL == "" {
 		err = fmt.Errorf("%s: не удалось получить ссылку на оплату", op)
 		slog.Error(op, err)
 		return "", err
 	}
 
+	// Возвращаем ссылку на оплату.
 	return paymentResponse.Confirmation.ConfirmationURL, nil
 }

@@ -207,12 +207,14 @@ func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string,
 func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 	const op = "internal/bot/messages.go/ManageUserKeyAfterPayment"
 
+	// Преобразуем userTgID из строки в int
 	intUserID, err := strconv.Atoi(userTgID)
 	if err != nil {
 		slog.Error(op, "Ошибка при преобразовании строки в int", err)
 		return
 	}
 
+	// Устанавливаем время истечения в зависимости от стоимости
 	var expirationTime time.Duration
 	switch value {
 	case "100.00": // 1 месяц
@@ -225,41 +227,46 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		expirationTime = 180 * 24 * time.Hour
 	}
 
-	// Проверяем наличие пользователя в db
+	// Проверяем наличие пользователя в базе данных
 	exists, err := m.repo.IsUserInDB(intUserID)
 	if err != nil {
 		return
 	}
 
-	// Если пользователь не найден в db
+	// Если пользователя нет в базе, создаём нового
 	if !exists {
 
-		// временная шляпа
+		// Генерация случайного реферального кода для нового пользователя
 		b := make([]byte, 4)
 		_, err = rand.Read(b)
+		if err != nil {
+			slog.Error("Ошибка при генерации реферального кода", err) // TODO временное решение
+			return
+		}
 		refCode := base64.URLEncoding.EncodeToString(b)[:6] // Берём первые 6 символов
 
-		// Создаём пользователя в таблице users
+		// Создаём нового пользователя
 		user := &entities.User{
 			UserTgID:     intUserID,
 			ChatTgID:     intUserID,
-			ReferralCode: refCode, // Если есть реферальный код, указываем его
+			ReferralCode: refCode, // Указываем реферальный код
 			CreatedAt:    time.Now(),
-			ReferredBy:   0, // Если пользователь был приглашён, указываем ID пригласившего
-			//TODO: надо будет в db 0 id скипнуть
+			ReferredBy:   0, // Пока что ставим 0, если пользователь не приглашён TODO
 		}
 
+		// Сохраняем пользователя в базе данных
 		if err = m.repo.CreateUser(user); err != nil {
 			slog.Error(op, "Ошибка при создании пользователя в базе данных", err)
 			return
 		}
 
-		// Генерируем ключ и сохраняем его в таблице keys
+		// Генерируем ключ для пользователя
 		key, err := m.GenerateKey(userTgID)
 		if err != nil && key == "" {
 			return
 		}
 
+		// Формируем тело ключа для записи в базу
 		keyRecord := &entities.Key{
 			UserTgID:  intUserID,
 			Key:       key,
@@ -267,20 +274,22 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 			ExpiresAt: time.Now().Add(expirationTime),
 		}
 
+		// Сохраняем ключ
 		if err = m.repo.SaveUserKey(keyRecord); err != nil {
 			return
 		}
 
-		slog.Info("Пользователь и ключ успешно добавлены", "userID", intUserID, "key", key)
+		slog.Info("Пользователь и ключ успешно добавлены", "userID", intUserID)
 		return
 	}
 
-	// Если пользователь найден в db, то
+	// Если пользователь существует, обновляем срок действия ключа
 	expiresAt, err := m.repo.GetExpirationTimeKey(intUserID)
 	if err != nil {
 		return
 	}
 
+	// Определяем новое время истечения
 	var newExpiration time.Time
 	now := time.Now()
 
@@ -292,21 +301,23 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		newExpiration = expiresAt.Add(expirationTime)
 	}
 
+	// Обновляем срок действия ключа
 	if err = m.repo.UpdateKeyExpiration(intUserID, newExpiration); err != nil {
 		return
 	}
 
-	slog.Info("Срок действия ключа успешно обновлён", slog.Int("user_id", intUserID), slog.Time("new_expires_at", newExpiration))
+	slog.Info("Срок действия ключа успешно обновлён", slog.Int("user_id", intUserID))
 }
 
-// GenerateKey - функция генерации ключа
+// GenerateKey - функция генерации нового ключа
 func (m *MessengerBot) GenerateKey(userTgID string) (string, error) {
-	const op = "internal/bot/messages.go/GetKey"
+	const op = "internal/bot/messages.go/GenerateKey"
 
-	apiURL := os.Getenv("API_URL") // url сервера с outline
-	if apiURL == "" {
+	// Получаем URL API для запроса к серверу
+	URL := os.Getenv("API_URL") // url сервера с outline
+	if URL == "" {
 		slog.Warn(op, "API_URL пуст")
-		return "", errors.New("")
+		return "", errors.New("API_URL is empty") // Возвращаем ошибку, если переменная окружения пустая
 	}
 
 	payload := entities.NewKeyPayload(userTgID)
@@ -315,6 +326,10 @@ func (m *MessengerBot) GenerateKey(userTgID string) (string, error) {
 		"time:", time.Now(),
 	)
 
+	// Формируем полный URL для запроса
+	apiURL := fmt.Sprintf("%s/access-keys", URL)
+
+	// Отправляем запрос на получение ключа
 	key, err := m.httpRequest.SendKeyRequest(apiURL, payload)
 	if err != nil {
 		return "", err
@@ -323,24 +338,123 @@ func (m *MessengerBot) GenerateKey(userTgID string) (string, error) {
 	// Формируем сообщение с ключом
 	text := fmt.Sprintf("Ваш ключ доступа:\n```%s```", key)
 
+	// Преобразуем userTgID в chatID (они одинаковы)
 	chatID, err := strconv.ParseInt(userTgID, 10, 64)
 	if err != nil {
-		slog.Error(op, "ошибка парсинга userTgID", err)
-		return key, err
+		slog.Error(op, "Ошибка парсинга userTgID", err)
+		return key, err // Возвращаем ключ, так как это не мешает его отправке
 	}
 
-	// Отправляем сообщение
+	// Отправляем сообщение пользователю
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = "Markdown"
 
 	if _, err = m.botAPI.Send(msg); err != nil {
-		slog.Error(op, "Failed to send message")
-		return key, err
+		slog.Error(op, "Ошибка при отправке сообщения пользователю", err)
+		return key, err // Возвращаем ключ, несмотря на ошибку отправки сообщения
 	}
 
-	slog.Info("key sent successfully", userTgID)
+	// Логируем успешную отправку ключа
+	slog.Info("Ключ успешно отправлен", "userID", userTgID)
 
+	// Возвращаем полученный ключ
 	return key, nil
+}
+
+// GetConnectStrOrReferral - функция для выдачи существующего ключа подключения или реферальной ссылки пользователю.
+func (m *MessengerBot) GetConnectStrOrReferral(update tgbotapi.Update, referral bool) {
+	const op = "internal/bot/messages.go/GetConnectStr"
+
+	// Получаем ID пользователя из сообщения
+	userTgID := update.Message.From.ID
+
+	// Переменные для хранения ключа или ссылки
+	var keyOrReferral string
+	var err error
+
+	// Проверяем, нужно ли возвращать реферальную ссылку
+	if referral {
+		// Получаем реферальную ссылку из репозитория
+		keyOrReferral, err = m.repo.GetConnectKeyOrReferral(userTgID, true)
+	} else {
+		// Получаем ключ подключения из репозитория
+		keyOrReferral, err = m.repo.GetConnectKeyOrReferral(userTgID, false)
+	}
+
+	// Если не найден, и ошибки нет
+	if keyOrReferral == "" && err == nil {
+
+		// Переменная для отправки сообщения с негативным исходом
+		var text string
+
+		if referral {
+			// Логируем, что у пользователя нет рефералки
+			slog.Info("У пользователя нет рефералки", slog.Int64("userID", userTgID))
+
+			// Текст сообщения, что нет рефералки
+			text = "Для получения реферальной ссылки, вам нужно хотя бы раз преобрести наш VPN"
+		} else {
+			// Логируем, что у пользователя нет ключа
+			slog.Info("У пользователя нет ключа подключения", slog.Int64("userID", userTgID))
+
+			// Текст сообщения, что ключ не найден
+			text = "У вас нет активных ключей"
+		}
+
+		// Создаем и отправляем сообщение пользователю
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+		if _, err := m.botAPI.Send(msg); err != nil {
+			// Логируем ошибку отправки сообщения
+			log.Println(op, "ошибка отправки сообщения:", err)
+		}
+		return
+	}
+
+	// Если произошла ошибка при запросе
+	if err != nil {
+		// Логируем ошибку при получении ключа
+		slog.Error(op, "Ошибка при получении ключа или рефералки", slog.Int64("userID", userTgID), slog.String("error", err.Error()))
+
+		// Текст сообщения об ошибке
+		text := "Произошла внутренняя ошибка, повторите запрос"
+
+		// Создаем и отправляем сообщение пользователю
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+		if _, err := m.botAPI.Send(msg); err != nil {
+			// Логируем ошибку отправки сообщения
+			log.Println(op, "ошибка отправки сообщения:", err)
+		}
+		return
+	}
+
+	// Переменная для отправки сообщения с успешным исходом
+	var text string
+
+	// Логируем успешную отправку ключа или реферальной ссылки
+	if referral {
+		text = fmt.Sprintf("Ваша реферальная ссылка:\n```%s```", keyOrReferral)
+	} else {
+		// Если ключ найден, отправляем его пользователю
+		text = fmt.Sprintf("Ваш ключ доступа:\n```%s```", keyOrReferral)
+	}
+
+	// Создаем сообщение и устанавливаем ParseMode
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+	msg.ParseMode = "Markdown" // Устанавливаем формат Markdown
+
+	// Отправляем сообщение
+	if _, err := m.botAPI.Send(msg); err != nil {
+		// Логируем ошибку отправки сообщения
+		log.Println(op, "ошибка отправки сообщения:", err)
+		return
+	}
+
+	// Логируем успешную отправку ключа или реферальной ссылки
+	if referral {
+		slog.Info("Реферальная ссылка успешно отправлена", slog.Int64("userID", userTgID))
+	} else {
+		slog.Info("Ключ успешно отправлен", slog.Int64("userID", userTgID))
+	}
 }
 
 // TimeFunction - врEменная функция

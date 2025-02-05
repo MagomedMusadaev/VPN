@@ -32,8 +32,6 @@ func (h *CallbackHandler) Button(callback *tgbotapi.CallbackQuery) {
 		h.messenger.SendPaymentInfoWithButton(callback, 3)
 	case "buy_6m":
 		h.messenger.SendPaymentInfoWithButton(callback, 6)
-	case "get_referral":
-		//h.messenger.SendMessage(callback.Message.Chat.ID, "реферальная ссылка")
 	default:
 		//h.messenger.SendMessage(callback.Message.Chat.ID, "Ты дурак что ли!?")
 	}
@@ -45,13 +43,11 @@ func (h *CallbackHandler) Message(update tgbotapi.Update) {
 	switch update.Message.Text {
 	case "/start":
 		h.messenger.GetInfoStart(update)
-	//case "/daykey":
-	//	h.messenger.GetKey(update)
 	case "/connect_str":
-		h.messenger.TimeFunction(update)
+		h.messenger.GetConnectStrOrReferral(update, false)
 	case "/instruction":
 		h.messenger.GetInstruction(update)
 	case "/referral":
-		h.messenger.TimeFunction(update)
+		h.messenger.GetConnectStrOrReferral(update, true)
 	}
 }
