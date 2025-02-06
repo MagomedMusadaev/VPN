@@ -306,6 +306,17 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		return
 	}
 
+	// Формируем сообщение для пользователя о новом сроке действия
+	message := fmt.Sprintf("Ваш ключ успешно продлён до %s.", newExpiration.Format("02.01.2006 15:04"))
+
+	// Отправляем сообщение пользователю
+	msg := tgbotapi.NewMessage(int64(intUserID), message)
+	if _, err := m.botAPI.Send(msg); err != nil {
+		// Логируем ошибку отправки сообщения
+		log.Println(op, "ошибка отправки сообщения:", err)
+		return
+	}
+
 	slog.Info("Срок действия ключа успешно обновлён", slog.Int("user_id", intUserID))
 }
 
@@ -336,7 +347,7 @@ func (m *MessengerBot) GenerateKey(userTgID string) (string, error) {
 	}
 
 	// Формируем сообщение с ключом
-	text := fmt.Sprintf("Ваш ключ доступа:\n```%s```", key)
+	text := fmt.Sprintf("Ваш ключ доступа:\n```%s```", key+"#KeeperVPN")
 
 	// Преобразуем userTgID в chatID (они одинаковы)
 	chatID, err := strconv.ParseInt(userTgID, 10, 64)

@@ -3,7 +3,6 @@ package bot
 import (
 	"bot_vpn/internal/entities"
 	"database/sql"
-	"github.com/redis/go-redis/v9"
 	"log/slog"
 	"time"
 )
@@ -18,15 +17,25 @@ type RepoInt interface {
 	GetConnectKeyOrReferral(userTgID int64, referral bool) (string, error)
 }
 
+//type Repo struct {
+//	db     *sql.DB
+//	client *redis.Client
+//}
+
+//func NewRepo(db *sql.DB, client *redis.Client) *Repo {
+//	return &Repo{
+//		db:     db,
+//		client: client,
+//	}
+//}
+
 type Repo struct {
-	db     *sql.DB
-	client *redis.Client
+	db *sql.DB
 }
 
-func NewRepo(db *sql.DB, client *redis.Client) *Repo {
+func NewRepo(db *sql.DB) *Repo {
 	return &Repo{
-		db:     db,
-		client: client,
+		db: db,
 	}
 }
 

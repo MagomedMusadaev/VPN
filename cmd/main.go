@@ -40,13 +40,14 @@ func main() {
 	if err != nil {
 		os.Exit(1)
 	}
-	client, err := bot.NewRedis() // Подключение Redis
-	if err != nil {
-		os.Exit(1)
-	}
+	//client, err := bot.NewRedis() // Подключение Redis
+	//if err != nil {
+	//	os.Exit(1)
+	//}
 
 	// Создание зависимостей
-	repo := bot.NewRepo(connDB, client)
+	//repo := bot.NewRepo(connDB, client)
+	repo := bot.NewRepo(connDB)
 	messenger := bot.NewMessengerBot(botAPI, bot.NewHttpRequest(), bot.NewKeyBoard(), repo)
 	httpHandler := bot.NewHttpHandler(messenger)
 	handler := bot.NewCallbackHandler(messenger)
