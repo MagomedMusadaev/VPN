@@ -14,10 +14,6 @@ import (
 	"time"
 )
 
-const (
-	ttl = 4 * time.Hour
-)
-
 type Messenger interface {
 	SendMessage(botAPI *tgbotapi.BotAPI, chatID int64, text string)
 	SendMessageWithKeyboard(botAPI *tgbotapi.BotAPI, chatID int64, text string, keyboard tgbotapi.InlineKeyboardMarkup)

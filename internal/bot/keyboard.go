@@ -4,6 +4,7 @@ import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 type KeyBoardInt interface {
 	GetTariffKeyboard() tgbotapi.InlineKeyboardMarkup
+	GetStartButton() tgbotapi.InlineKeyboardMarkup
 }
 
 type KeyBoard struct {
