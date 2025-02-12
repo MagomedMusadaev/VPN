@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	const op = "cmd.main"
+	const op = "cmd/main"
 
 	// Загрузка переменных окружения из .env файла
 	if err := godotenv.Load("../.env"); err != nil {

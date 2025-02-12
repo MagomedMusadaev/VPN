@@ -3,14 +3,12 @@ package bot
 import (
 	"bot_vpn/internal/entities"
 	"bot_vpn/internal/utils"
-	"encoding/base64"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"log"
 	"log/slog"
-	"math/rand"
 	"os"
 	"strconv"
 	"time"
@@ -46,19 +44,93 @@ func NewMessengerBot(botAPI *tgbotapi.BotAPI, httpRequest *HttpRequest, keyBoard
 func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 	const op = "internal/bot/messages.go/GetInfoStart"
 
-	welcomeMessage := "🎉 Приветствуем тебя в Keeper VPN! 🎉\n\n" +
-		"🚀 Обеспечь себе безлимитный и быстрый VPN.\n\n" +
-		"Для подключения:\n\n" +
-		"📌 Выберите тариф\n" +
-		"💳 Оплатите план\n" +
-		"🛠️ Следуйте простым инструкциям\n\n"
+	userID := update.Message.From.ID
+	referralID := update.Message.CommandArguments() // Получаем реферальный ID
 
-	keyboard := m.keyBoard.GetTariffKeyboard()
+	var referredBy int
+	if referralID != "" {
+		refID, err := strconv.Atoi(referralID)
+		if err != nil {
+			slog.Error(op, "Ошибка преобразования referral_id", err)
+			return
+		}
+		referredBy = refID
+	}
+
+	// запрос в базу
+	exists, err := m.repo.IsUserInDB(int(userID))
+	if err != nil {
+		return
+	}
+
+	// Если пользователя нет в базе
+	if !exists {
+		welcomeMessage := "🎉 Приветствуем тебя в Keeper VPN! 🎉\n\n" +
+			"🚀 Обеспечь себе безлимитный и быстрый VPN.\n\n" +
+			"Для подключения:\n\n" +
+			"📌 Выберите тариф\n" +
+			"💳 Оплатите план\n" +
+			"🛠️ Следуйте простым инструкциям\n\n"
+
+		keyboard := m.keyBoard.GetTariffKeyboard()
+
+		// Отправляем сообщение с клавиатурой
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMessage)
+		msg.ReplyMarkup = "Markdown" // Чтобы использовать жирный шрифт и эмодзи
+		msg.ReplyMarkup = keyboard
+
+		if _, err = m.botAPI.Send(msg); err != nil {
+			slog.Error(op, err)
+		}
+
+		// Создаём нового пользователя
+		user := &entities.User{
+			UserTgID:     int(userID),
+			ChatTgID:     int(userID),
+			ReferralCode: "https://t.me/keeper_vpn_bot?start=" + strconv.Itoa(int(userID)),
+			CreatedAt:    time.Now(),
+			ReferredBy:   referredBy,
+		}
+
+		// Сохраняем пользователя в базе данных
+		if err = m.repo.CreateUser(user); err != nil {
+			slog.Error(op, "Ошибка при создании пользователя в базе данных", err)
+			return
+		}
+
+		return
+	}
+
+	var respMessage string
+	expirationTime, err := m.repo.GetExpirationTimeKey(int(userID))
+
+	// Проверяем наличие ошибки и истечение срока действия ключа.
+	switch {
+	case err != nil && errors.Is(err, sql.ErrNoRows):
+		// У пользователя нет ключа
+		respMessage = "У вас нет активного ключа. Вы можете приобрести подписку."
+
+	case err == nil && time.Now().After(expirationTime):
+		// Если ключ истёк
+		respMessage = "Ваш ключ истёк. Продлите подписку, чтобы продолжить пользоваться сервисом."
+
+	case err == nil:
+		// Если всё в порядке
+		respMessage = fmt.Sprintf("🔹 Ваша подписка активна до %s", expirationTime.Format("02.01.2006 15:04:05"))
+	}
+
+	welcomeMessage := fmt.Sprintf(
+		"🎉 Добро пожаловать в Keeper VPN!\n\n"+
+			"%s\n\n"+
+			"✅ Оставайтесь под защитой без ограничений!",
+		respMessage,
+	)
+
+	keyboard := m.keyBoard.GetStartButton()
 
 	// Отправляем сообщение с клавиатурой
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMessage)
-	msg.ReplyMarkup = "Markdown" // Чтобы использовать жирный шрифт и эмодзи
-	msg.ReplyMarkup = keyboard
+	msg.ReplyMarkup = keyboard // Используем клавиатуру
 
 	if _, err := m.botAPI.Send(msg); err != nil {
 		slog.Error(op, err)
@@ -82,7 +154,7 @@ func (m *MessengerBot) GetInstruction(update tgbotapi.Update) {
 	// Отправляем сообщение
 	_, err := m.botAPI.Send(msg)
 	if err != nil {
-		log.Println(op, "Error sending message:", err)
+		slog.Error(op, "Error sending message:", err)
 	}
 }
 
@@ -121,8 +193,7 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 	text := fmt.Sprintf(
 		"<b>💵 Оплата </b> \n"+
 			"Вы выбрали тариф на %s. 💎 \n"+
-			"Стоимость: %d рублей. 💳 \n"+
-			"После оплаты ключ будет сгенерирован и отправлен автоматически. 🔑\n",
+			"Стоимость: %d рублей. 💳 \n",
 		reqMount, price,
 	)
 
@@ -204,7 +275,7 @@ func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string,
 }
 
 // ManageUserDataAfterPayment - обрабатывает оплату пользователя и управляет его данными.
-func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
+func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) { // TODO переписать логику метода польностью
 	const op = "internal/bot/messages.go/ManageUserKeyAfterPayment"
 
 	// Преобразуем userTgID из строки в int
@@ -227,38 +298,16 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		expirationTime = 180 * 24 * time.Hour
 	}
 
-	// Проверяем наличие пользователя в базе данных
-	exists, err := m.repo.IsUserInDB(intUserID)
+	// Проверяем наличие ключа для пользователя в базе данных
+	exists, err := m.repo.IsKeyInDB(intUserID)
 	if err != nil {
+		// Логируем ошибку и выходим из функции
+		slog.Error("Ошибка при проверке наличия ключа", "userID", intUserID, "error", err)
 		return
 	}
 
-	// Если пользователя нет в базе, создаём нового
+	// Если ключа нет в базе
 	if !exists {
-
-		// Генерация случайного реферального кода для нового пользователя
-		b := make([]byte, 4)
-		_, err = rand.Read(b)
-		if err != nil {
-			slog.Error("Ошибка при генерации реферального кода", err) // TODO временное решение
-			return
-		}
-		refCode := base64.URLEncoding.EncodeToString(b)[:6] // Берём первые 6 символов
-
-		// Создаём нового пользователя
-		user := &entities.User{
-			UserTgID:     intUserID,
-			ChatTgID:     intUserID,
-			ReferralCode: refCode, // Указываем реферальный код
-			CreatedAt:    time.Now(),
-			ReferredBy:   0, // Пока что ставим 0, если пользователь не приглашён TODO
-		}
-
-		// Сохраняем пользователя в базе данных
-		if err = m.repo.CreateUser(user); err != nil {
-			slog.Error(op, "Ошибка при создании пользователя в базе данных", err)
-			return
-		}
 
 		// Генерируем ключ для пользователя
 		key, err := m.GenerateKey(userTgID)
@@ -279,11 +328,11 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 			return
 		}
 
-		slog.Info("Пользователь и ключ успешно добавлены", "userID", intUserID)
+		slog.Info("Ключ успешно добавлен", "userID", intUserID)
 		return
 	}
 
-	// Если пользователь существует, обновляем срок действия ключа
+	// Если ключ существует, обновляем срок действия
 	expiresAt, err := m.repo.GetExpirationTimeKey(intUserID)
 	if err != nil {
 		return
@@ -313,7 +362,7 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 	msg := tgbotapi.NewMessage(int64(intUserID), message)
 	if _, err := m.botAPI.Send(msg); err != nil {
 		// Логируем ошибку отправки сообщения
-		log.Println(op, "ошибка отправки сообщения:", err)
+		slog.Error(op, "ошибка отправки сообщения:", err)
 		return
 	}
 
@@ -416,7 +465,7 @@ func (m *MessengerBot) GetConnectStrOrReferral(update tgbotapi.Update, referral 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 		if _, err := m.botAPI.Send(msg); err != nil {
 			// Логируем ошибку отправки сообщения
-			log.Println(op, "ошибка отправки сообщения:", err)
+			slog.Error(op, "ошибка отправки сообщения:", err)
 		}
 		return
 	}
@@ -433,7 +482,7 @@ func (m *MessengerBot) GetConnectStrOrReferral(update tgbotapi.Update, referral 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 		if _, err := m.botAPI.Send(msg); err != nil {
 			// Логируем ошибку отправки сообщения
-			log.Println(op, "ошибка отправки сообщения:", err)
+			slog.Error(op, "ошибка отправки сообщения:", err)
 		}
 		return
 	}
@@ -456,7 +505,7 @@ func (m *MessengerBot) GetConnectStrOrReferral(update tgbotapi.Update, referral 
 	// Отправляем сообщение
 	if _, err := m.botAPI.Send(msg); err != nil {
 		// Логируем ошибку отправки сообщения
-		log.Println(op, "ошибка отправки сообщения:", err)
+		slog.Error(op, "ошибка отправки сообщения:", err)
 		return
 	}
 
@@ -468,11 +517,45 @@ func (m *MessengerBot) GetConnectStrOrReferral(update tgbotapi.Update, referral 
 	}
 }
 
-// TimeFunction - врEменная функция
-func (m *MessengerBot) TimeFunction(update tgbotapi.Update) {
-	messageText := fmt.Sprint("На стадии разработки!!!")
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)
-	if _, err := m.botAPI.Send(msg); err != nil {
-		return
+// Answer - функция для отправки сообщения продления ключа.
+func (m *MessengerBot) Answer(callback *tgbotapi.CallbackQuery) {
+	const op = "internal/bot/messages.go/Answer"
+
+	// Если сообщение содержит текст, то удаляем его
+	if callback.Message.Text != "" {
+		editMsg := tgbotapi.NewEditMessageText(
+			callback.Message.Chat.ID,
+			callback.Message.MessageID,
+			"", // Оставляем текст пустым, чтобы удалить старый
+		)
+
+		// Отправляем запрос на удаление текста
+		if _, err := m.botAPI.Send(editMsg); err != nil {
+			slog.Warn(op, err)
+		}
+	}
+
+	// Получаем клавиатуру с кнопками
+	startKeyboard := m.keyBoard.GetTariffKeyboard()
+
+	// Обновляем клавиатуру с новой
+	editMsgKeyboard := tgbotapi.NewEditMessageReplyMarkup(
+		callback.Message.Chat.ID,
+		callback.Message.MessageID,
+		startKeyboard, // Новая клавиатура
+	)
+
+	// Отправляем новую клавиатуру
+	if _, err := m.botAPI.Send(editMsgKeyboard); err != nil {
+		slog.Error(op, "ошибка отправки клавиатуры:", err)
 	}
 }
+
+//// TimeFunction - врEменная функция
+//func (m *MessengerBot) TimeFunction(update tgbotapi.Update) {
+//	messageText := fmt.Sprint("На стадии разработки!!!")
+//	msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)
+//	if _, err := m.botAPI.Send(msg); err != nil {
+//		return
+//	}
+//}

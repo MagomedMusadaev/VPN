@@ -37,3 +37,16 @@ func (k *KeyBoard) GetTariffKeyboard() tgbotapi.InlineKeyboardMarkup {
 	// Возвращаем разметку с кнопками.
 	return tgbotapi.NewInlineKeyboardMarkup(buttons...)
 }
+
+// GetStartButton -  возвращает клавиатуру с кнопками если user уже является пользователем.
+func (k *KeyBoard) GetStartButton() tgbotapi.InlineKeyboardMarkup {
+	// Создаём кнопки.
+	buttons := [][]tgbotapi.InlineKeyboardButton{
+		{
+			tgbotapi.NewInlineKeyboardButtonData("💰 Продлить", "answer"),
+		},
+	}
+
+	// Возвращаем разметку с кнопками.
+	return tgbotapi.NewInlineKeyboardMarkup(buttons...)
+}

@@ -2,6 +2,7 @@ package bot
 
 import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"strings"
 )
 
 type CallbackHandlerInt interface {
@@ -32,22 +33,29 @@ func (h *CallbackHandler) Button(callback *tgbotapi.CallbackQuery) {
 		h.messenger.SendPaymentInfoWithButton(callback, 3)
 	case "buy_6m":
 		h.messenger.SendPaymentInfoWithButton(callback, 6)
-	default:
-		//h.messenger.SendMessage(callback.Message.Chat.ID, "Ты дурак что ли!?")
+	case "answer":
+		h.messenger.Answer(callback)
 	}
 }
 
 // Message - обрабатывает text-запросы
 func (h *CallbackHandler) Message(update tgbotapi.Update) {
 
-	switch update.Message.Text {
-	case "/start":
+	switch {
+	case update.Message != nil && strings.HasPrefix(update.Message.Text, "/start"):
 		h.messenger.GetInfoStart(update)
+	}
+
+	switch update.Message.Text {
+	//case "/start":
+	//	h.messenger.GetInfoStart(update)
 	case "/connect_str":
 		h.messenger.GetConnectStrOrReferral(update, false)
 	case "/instruction":
 		h.messenger.GetInstruction(update)
 	case "/referral":
 		h.messenger.GetConnectStrOrReferral(update, true)
+	case "/start referral":
+		h.messenger.GetInfoStart(update)
 	}
 }

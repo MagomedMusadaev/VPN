@@ -60,7 +60,7 @@ func (r *Repo) IsUserInDB(userID int) (bool, error) {
 	}
 
 	// Логируем успешную проверку: найден ли пользователь в базе.
-	slog.Info(op, "Проверка пользователя в базе", slog.Int("userID", userID), slog.Bool("exists", count > 0))
+	slog.Info("Проверка пользователя в базе", slog.Int("userID", userID), slog.Bool("exists", count > 0))
 
 	// Если count > 0, значит пользователь существует в базе.
 	return count > 0, nil
@@ -96,6 +96,28 @@ func (r *Repo) SaveUserKey(key *entities.Key) error {
 	return nil
 }
 
+// IsKeyInDB - функция проверяет наличие ключа в базе данных по userID.
+func (r *Repo) IsKeyInDB(userID int) (bool, error) {
+	const op = "internal/bot/repository.go/IsKeyInDB"
+
+	// Запрос на подсчёт строк с данным user_id в таблице keys.
+	query := "SELECT COUNT(1) FROM keys WHERE user_id = $1"
+
+	var count int
+	err := r.db.QueryRow(query, userID).Scan(&count)
+	if err != nil {
+		// Логируем ошибку выполнения запроса.
+		slog.Error(op, "Ошибка при выполнении запроса", slog.Int("userID", userID), slog.String("error", err.Error()))
+		return false, err
+	}
+
+	// Логируем успешную проверку: найден ли ключ в базе для этого user_id.
+	slog.Info("Проверка наличия ключа в базе", slog.Int("userID", userID), slog.Bool("exists", count > 0))
+
+	// Если count > 0, значит ключ существует в базе данных.
+	return count > 0, nil
+}
+
 // GetExpirationTimeKey - функция получения времени истечения ключа пользователя.
 func (r *Repo) GetExpirationTimeKey(userTgID int) (time.Time, error) {
 	const op = "internal/bot/repository.go/GetExpirationTimeKey"
@@ -105,14 +127,14 @@ func (r *Repo) GetExpirationTimeKey(userTgID int) (time.Time, error) {
 
 	err := r.db.QueryRow(query, userTgID).Scan(&expiresAt)
 	if err != nil {
-		slog.Error(op, slog.String("error", err.Error()))
-		return time.Time{}, err
+		slog.Warn(op, slog.String("error", err.Error()))
+		return expiresAt, err
 	}
 
 	return expiresAt, nil
 }
 
-// UpdateKeyExpiration - функция обновления времени истечения ключа пользователя.
+// UpdateKeyExpiration - функция обновления(продления) времени истечения ключа пользователя.
 func (r *Repo) UpdateKeyExpiration(userTgID int, newExpiration time.Time) error {
 	const op = "internal/bot/repository.go/UpdateKeyExpiration"
 
