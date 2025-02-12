@@ -24,7 +24,7 @@ func NewHttpRequest() *HttpRequest {
 	return &HttpRequest{}
 }
 
-// createInsecureHTTPClient - создает и возвращает HTTP-клиент с отключенной проверкой SSL. TODO: избавиться от этого в конце
+// createInsecureHTTPClient - создает и возвращает HTTP-клиент с отключенной проверкой SSL. TODO: избавиться от этого в концее
 func createInsecureHTTPClient() *http.Client {
 	// Настраиваем транспорт с отключенной проверкой сертификатов SSL
 	tr := &http.Transport{
