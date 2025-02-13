@@ -15,7 +15,7 @@ func main() {
 	const op = "cmd/main"
 
 	// Загрузка переменных окружения из .env файла
-	if err := godotenv.Load("../.env"); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		slog.Error(op, "Ошибка загрузки .env файла", slog.String("error", err.Error()))
 	}
 
