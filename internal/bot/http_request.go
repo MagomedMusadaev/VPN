@@ -47,6 +47,8 @@ func createInsecureHTTPClient() *http.Client {
 func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload) (string, string, error) { // TODO: нужно дорабоать (возможно)
 	const op = "internal/bot/http_request/SendKeyRequest"
 
+	fmt.Println("до изменений", apiURL)
+
 	// Сериализация полезной нагрузки в JSON.
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
