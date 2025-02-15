@@ -2,9 +2,13 @@ package bot
 
 import (
 	"bot_vpn/internal/entities"
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"github.com/redis/go-redis/v9"
 	"log/slog"
+	"strconv"
 	"time"
 )
 
@@ -18,25 +22,15 @@ type RepoInt interface {
 	GetConnectKeyOrReferral(userTgID int64, referral bool) (string, error)
 }
 
-//type Repo struct {
-//	db     *sql.DB
-//	client *redis.Client
-//}
-
-//func NewRepo(db *sql.DB, client *redis.Client) *Repo {
-//	return &Repo{
-//		db:     db,
-//		client: client,
-//	}
-//}
-
 type Repo struct {
-	db *sql.DB
+	db     *sql.DB
+	client *redis.Client
 }
 
-func NewRepo(db *sql.DB) *Repo {
+func NewRepo(db *sql.DB, client *redis.Client) *Repo {
 	return &Repo{
-		db: db,
+		db:     db,
+		client: client,
 	}
 }
 
@@ -65,6 +59,26 @@ func (r *Repo) IsUserInDB(userID int) (bool, error) {
 
 	// Если count > 0, значит пользователь существует в базе.
 	return count > 0, nil
+}
+
+// GetUserReferral - функция выдаёт реферала пользователя по userID.
+func (r *Repo) GetUserReferral(userID int) (int, error) {
+	const op = "internal/bot/repository.go/GetUserReferral"
+
+	query := `SELECT referred_by FROM users WHERE telegram_id = $1`
+	var referralUserID int
+
+	err := r.db.QueryRow(query, userID).Scan(&referralUserID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			slog.Warn(op, slog.String("message", "Нет реферала у пользователя"), slog.Int("userID", userID))
+			return 0, nil // Нет реферала — это не ошибка
+		}
+		slog.Error(op, slog.String("Ошибка запроса к БД", err.Error()))
+		return 0, err
+	}
+
+	return referralUserID, nil
 }
 
 // CreateUser - функция записи нового пользователя в базу данных.
@@ -271,4 +285,48 @@ func (r *Repo) GetKeyIDByUserID(userID string) (int, error) {
 	}
 
 	return keyID, nil
+}
+
+// SaveLastMessageID - сохраняет ID последнего отправленного сообщения в Redis
+func (r *Repo) SaveLastMessageID(chatID int64, messageID int) error {
+	const op = "internal/bot/repository.go/SaveLastMessageID"
+
+	// Удаляем старое сообщение, если оно есть
+	if err := r.client.Del(context.Background(), fmt.Sprintf("last_message:%d", chatID)).Err(); err != nil {
+		slog.Error(op, "Ошибка при удалении старого сообщения", err)
+		return err
+	}
+
+	// Сохраняем новое сообщение в Redis с TTL 12 часов
+	err := r.client.Set(context.Background(), fmt.Sprintf("last_message:%d", chatID), messageID, 12*time.Hour).Err()
+	if err != nil {
+		slog.Error(op, "Ошибка при сохранении нового сообщения", err)
+		return err
+	}
+
+	return nil
+}
+
+// GetLastMessageID - возвращает ID последнего сообщения для пользователя из Redis
+func (r *Repo) GetLastMessageID(chatID int64) (int, error) {
+	const op = "internal/bot/repository.go/GetLastMessageID"
+
+	messageIDStr, err := r.client.Get(context.Background(), fmt.Sprintf("last_message:%d", chatID)).Result()
+	if errors.Is(err, redis.Nil) {
+		slog.Warn(op, slog.String("Нет данных по ключу в redis", ""))
+		return 0, nil // Сообщение не найдено
+	}
+	if err != nil {
+		slog.Error(op, "Ошибка при получении ID последнего сообщения", err)
+		return 0, err
+	}
+
+	// Преобразуем строку в int
+	messageID, err := strconv.Atoi(messageIDStr)
+	if err != nil {
+		slog.Error(op, "Ошибка при преобразовании messageID в int", err)
+		return 0, err
+	}
+
+	return messageID, nil
 }

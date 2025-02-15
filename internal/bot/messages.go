@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/redis/go-redis/v9"
 	"log/slog"
 	"os"
 	"strconv"
@@ -26,14 +27,16 @@ type MessengerBot struct {
 	httpRequest *HttpRequest
 	keyBoard    *KeyBoard
 	repo        *Repo
+	client      *redis.Client
 }
 
-func NewMessengerBot(botAPI *tgbotapi.BotAPI, httpRequest *HttpRequest, keyBoard *KeyBoard, repo *Repo) *MessengerBot {
+func NewMessengerBot(botAPI *tgbotapi.BotAPI, httpRequest *HttpRequest, keyBoard *KeyBoard, repo *Repo, client *redis.Client) *MessengerBot {
 	return &MessengerBot{
 		botAPI:      botAPI,
 		httpRequest: httpRequest,
 		keyBoard:    keyBoard,
 		repo:        repo,
+		client:      client,
 	}
 }
 
@@ -283,16 +286,22 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 	}
 
 	// Устанавливаем время истечения в зависимости от стоимости
+	var referralExpirationTime time.Duration
 	var expirationTime time.Duration
+
 	switch value {
 	case "100.00": // 1 месяц
 		expirationTime = 30 * 24 * time.Hour
+		referralExpirationTime = 4 * 24 * time.Hour
 	case "190.00": // 2 месяца
 		expirationTime = 60 * 24 * time.Hour
+		referralExpirationTime = 8 * 24 * time.Hour
 	case "270.00": // 3 месяца
 		expirationTime = 90 * 24 * time.Hour
+		referralExpirationTime = 12 * 24 * time.Hour
 	case "490.00": // 6 месяцев
 		expirationTime = 180 * 24 * time.Hour
+		referralExpirationTime = 16 * 24 * time.Hour
 	}
 
 	// Проверяем наличие ключа для пользователя в базе данных
@@ -312,6 +321,28 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 			return
 		}
 
+		// Формируем сообщение с ключом
+		text := fmt.Sprintf("Ваш ключ доступа:\n```%s```", key+"#KeeperVPN")
+
+		// Преобразуем userTgID в chatID (они одинаковы)
+		chatID, err := strconv.ParseInt(userTgID, 10, 64)
+		if err != nil {
+			slog.Error(op, "Ошибка парсинга userTgID", err)
+			return
+		}
+
+		// Отправляем сообщение пользователю
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+
+		if _, err = m.botAPI.Send(msg); err != nil {
+			slog.Error(op, "Ошибка при отправке сообщения пользователю", err)
+			return
+		}
+
+		// Логируем успешную отправку ключа
+		slog.Info("Ключ успешно отправлен", "userID", userTgID)
+
 		// Формируем тело ключа для записи в базу
 		keyRecord := &entities.Key{
 			UserTgID:  intUserID,
@@ -325,6 +356,8 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		if err = m.repo.SaveUserKey(keyRecord); err != nil {
 			return
 		}
+
+		go m.AddReferralSubscriptionDays(userTgID, referralExpirationTime)
 
 		slog.Info("Ключ успешно добавлен", "userID", intUserID)
 		return
@@ -386,7 +419,157 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		return
 	}
 
-	slog.Info("Срок действия ключа успешно обновлён", slog.Int("user_id", intUserID))
+	// вызов функции которая будет добалять время рефералу 4 дня за месяц
+	go m.AddReferralSubscriptionDays(userTgID, referralExpirationTime)
+}
+
+// AddReferralSubscriptionDays - функция, которая начисляет бонусные дни за реферала.
+func (m *MessengerBot) AddReferralSubscriptionDays(userID string, expirationTime time.Duration) {
+	const op = "internal/bot/messages.go/AddReferralSubscriptionDays"
+
+	// Преобразуем userID в int
+	intUserID, err := strconv.Atoi(userID)
+	if err != nil {
+		slog.Error(op, "Ошибка преобразования userID", err)
+		return
+	}
+
+	// Получаем реферала пользователя
+	referralUserID, err := m.repo.GetUserReferral(intUserID)
+	if errors.Is(err, sql.ErrNoRows) {
+		// Если реферала нет, просто выходим
+		return
+	}
+	strReferralUserID := strconv.Itoa(referralUserID)
+
+	// Проверяем наличие ключа у реферала
+	exists, err := m.repo.IsKeyInDB(referralUserID)
+	if err != nil {
+		return
+	}
+
+	// Если ключ есть, обновляем срок его действия
+	if exists {
+		expiresAt, err := m.repo.GetExpirationTimeKey(referralUserID)
+		if err != nil {
+			return
+		}
+
+		var newExpiration time.Time
+		now := time.Now()
+
+		if now.After(expiresAt) {
+			newExpiration = now.Add(expirationTime)
+		} else {
+			newExpiration = expiresAt.Add(expirationTime)
+		}
+
+		// Обновляем срок действия ключа в базе
+		if err = m.repo.UpdateKeyExpiration(referralUserID, newExpiration); err != nil {
+			return
+		}
+
+		// Уведомляем пользователя о продлении времени действия ключа
+		if err = m.NotifyUserAboutReferralPurchase(strReferralUserID, newExpiration); err != nil {
+			slog.Error("Ошибка при отправке уведомления о продлении ключа", "userID", referralUserID, "error", err)
+			return
+		}
+
+		slog.Info("Время для реферала успешно обновлено")
+		return
+	}
+
+	// Если ключа нет, создаём новый
+	key, keyID, err := m.GenerateKey(strReferralUserID)
+	if err != nil || key == "" {
+		return
+	}
+
+	// Записываем новый ключ в базу
+	keyRecord := &entities.Key{
+		UserTgID:  referralUserID,
+		Key:       key + "#KeeperVPN",
+		KeyID:     keyID,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(expirationTime),
+	}
+
+	if err = m.repo.SaveUserKey(keyRecord); err != nil {
+		return
+	}
+
+	// Уведомляем пользователя о новом ключе
+	if err = m.NotifyUserAboutReferralPurchase(strReferralUserID, time.Now().Add(expirationTime)); err != nil {
+		return
+	}
+
+	slog.Info(op, "Ключ успешно добавлен и отправлен", slog.Int("userID", referralUserID))
+}
+
+// NotifyUserAboutReferralPurchase - отправляет уведомление пользователю о том, что по его реферальной ссылке был куплен тариф.
+func (m *MessengerBot) NotifyUserAboutReferralPurchase(userTgID string, expiresAt time.Time) error {
+	const op = "internal/bot/messenger.go/NotifyUserAboutReferralPurchase"
+
+	// Преобразуем userTgID в chatID
+	chatID, err := strconv.ParseInt(userTgID, 10, 64)
+	if err != nil {
+		slog.Error(op, slog.String("Ошибка парсинга userTgID", err.Error()))
+		return err
+	}
+
+	// Формируем дату окончания подписки
+	expirationDate := expiresAt.Format("02.01.2006 15:04")
+
+	// Формируем сообщение
+	text := fmt.Sprintf(
+		"🎉 *По вашей реферальной ссылке оформлен тариф!* 🎉\n\n"+
+			"📅 *Ключ действителен до:* `%s`\n\n"+
+			"⬇️ Нажмите на кнопку ниже, чтобы получить ключ.",
+		expirationDate,
+	)
+
+	// Создаём кнопку для активации команды
+	button := tgbotapi.NewInlineKeyboardButtonData("🔑 Получить ключ", "get_referral")
+	keyboard := tgbotapi.NewInlineKeyboardMarkup([]tgbotapi.InlineKeyboardButton{button})
+
+	// Получаем ID последнего отправленного сообщения из Redis
+	lastSentMessageID, err := m.repo.GetLastMessageID(chatID)
+	if err != nil {
+		return err
+	}
+
+	// Если есть старое сообщение, удаляем его
+	if lastSentMessageID != 0 {
+		deleteMsgConfig := tgbotapi.DeleteMessageConfig{
+			ChatID:    chatID,
+			MessageID: lastSentMessageID,
+		}
+		// Отправляем запрос на удаление старого сообщения
+		_, err := m.botAPI.Request(deleteMsgConfig)
+		if err != nil {
+			slog.Error(op, slog.String("Ошибка при удалении старого сообщения", err.Error()))
+			return err
+		}
+	}
+
+	// Создаём и отправляем новое сообщение
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = keyboard
+
+	sentMsg, err := m.botAPI.Send(msg)
+	if err != nil {
+		slog.Error(op, slog.String("Ошибка при отправке сообщения пользователю", err.Error()))
+		return err
+	}
+
+	// Сохраняем ID отправленного сообщения в Redis
+	err = m.repo.SaveLastMessageID(chatID, sentMsg.MessageID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // GenerateKey - функция генерации нового ключа.
@@ -415,38 +598,13 @@ func (m *MessengerBot) GenerateKey(userTgID string) (string, string, error) {
 		return "", "", err
 	}
 
-	// Формируем сообщение с ключом
-	text := fmt.Sprintf("Ваш ключ доступа:\n```%s```", key+"#KeeperVPN")
-
-	// Преобразуем userTgID в chatID (они одинаковы)
-	chatID, err := strconv.ParseInt(userTgID, 10, 64)
-	if err != nil {
-		slog.Error(op, "Ошибка парсинга userTgID", err)
-		return key, keyID, err // Возвращаем ключ, так как это не мешает его отправке
-	}
-
-	// Отправляем сообщение пользователю
-	msg := tgbotapi.NewMessage(chatID, text)
-	msg.ParseMode = "Markdown"
-
-	if _, err = m.botAPI.Send(msg); err != nil {
-		slog.Error(op, "Ошибка при отправке сообщения пользователю", err)
-		return key, keyID, err // Возвращаем ключ, несмотря на ошибку отправки сообщения
-	}
-
-	// Логируем успешную отправку ключа
-	slog.Info("Ключ успешно отправлен", "userID", userTgID)
-
 	// Возвращаем полученный ключ
 	return key, keyID, nil
 }
 
 // GetConnectStrOrReferral - функция для выдачи существующего ключа подключения или реферальной ссылки пользователю.
-func (m *MessengerBot) GetConnectStrOrReferral(update tgbotapi.Update, referral bool) {
+func (m *MessengerBot) GetConnectStrOrReferral(userTgID int64, referral bool) {
 	const op = "internal/bot/messages.go/GetConnectStr"
-
-	// Получаем ID пользователя из сообщения
-	userTgID := update.Message.From.ID
 
 	// Переменные для хранения ключа или ссылки
 	var keyOrReferral string
@@ -482,7 +640,7 @@ func (m *MessengerBot) GetConnectStrOrReferral(update tgbotapi.Update, referral 
 		}
 
 		// Создаем и отправляем сообщение пользователю
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+		msg := tgbotapi.NewMessage(userTgID, text)
 		if _, err := m.botAPI.Send(msg); err != nil {
 			// Логируем ошибку отправки сообщения
 			slog.Error(op, "ошибка отправки сообщения:", err)
@@ -499,7 +657,7 @@ func (m *MessengerBot) GetConnectStrOrReferral(update tgbotapi.Update, referral 
 		text := "Произошла внутренняя ошибка, повторите запрос"
 
 		// Создаем и отправляем сообщение пользователю
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+		msg := tgbotapi.NewMessage(userTgID, text)
 		if _, err := m.botAPI.Send(msg); err != nil {
 			// Логируем ошибку отправки сообщения
 			slog.Error(op, "ошибка отправки сообщения:", err)
@@ -519,7 +677,7 @@ func (m *MessengerBot) GetConnectStrOrReferral(update tgbotapi.Update, referral 
 	}
 
 	// Создаем сообщение и устанавливаем ParseMode
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+	msg := tgbotapi.NewMessage(userTgID, text)
 	msg.ParseMode = "Markdown" // Устанавливаем формат Markdown
 
 	// Отправляем сообщение

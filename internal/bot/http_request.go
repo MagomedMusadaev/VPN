@@ -165,12 +165,12 @@ func (h *HttpRequest) RemoveOutlineKeyLimit(keyID int, url string) error {
 		return err
 	}
 
-	slog.Info("Ограничение по ключу %d успешно снято\n", keyID)
+	slog.Info("Ограничение успешно снято по ключу", keyID)
 	return nil
 }
 
 // GetPaymentURL - функци генерации ссылки оплаты на ЮКасса.
-func (h *HttpRequest) GetPaymentURL(jsonData []byte, shopID, secretKey, tgUserID string) (string, error) {
+func (h *HttpRequest) GetPaymentURL(jsonData []byte, shopID, secretKey, tgUserID string) (string, error) { // TODO разобраться с tgUserID
 	const op = "internal/bot/http_request/GetPaymentURL"
 
 	// URL для запроса.

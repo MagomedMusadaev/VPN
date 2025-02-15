@@ -15,7 +15,7 @@ func main() {
 	const op = "cmd/main"
 
 	// Загрузка переменных окружения из .env файла
-	if err := godotenv.Load(".env"); err != nil {
+	if err := godotenv.Load("F:\\bot_vpn\\.env"); err != nil {
 		slog.Error(op, "Ошибка загрузки .env файла", slog.String("error", err.Error()))
 	}
 
@@ -40,15 +40,14 @@ func main() {
 	if err != nil {
 		os.Exit(1)
 	}
-	//client, err := bot.NewRedis() // Подключение Redis
-	//if err != nil {
-	//	os.Exit(1)
-	//}
+	client, err := bot.NewRedis() // Подключение Redis
+	if err != nil {
+		os.Exit(1)
+	}
 
 	// Создание зависимостей
-	//repo := bot.NewRepo(connDB, client)
-	repo := bot.NewRepo(connDB)
-	messenger := bot.NewMessengerBot(botAPI, bot.NewHttpRequest(), bot.NewKeyBoard(), repo)
+	repo := bot.NewRepo(connDB, client)
+	messenger := bot.NewMessengerBot(botAPI, bot.NewHttpRequest(), bot.NewKeyBoard(), repo, client)
 	httpHandler := bot.NewHttpHandler(messenger)
 	handler := bot.NewCallbackHandler(messenger)
 

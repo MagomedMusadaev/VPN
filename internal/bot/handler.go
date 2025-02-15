@@ -35,6 +35,8 @@ func (h *CallbackHandler) Button(callback *tgbotapi.CallbackQuery) {
 		h.messenger.SendPaymentInfoWithButton(callback, 6)
 	case "answer":
 		h.messenger.Answer(callback)
+	case "get_referral":
+		h.messenger.GetConnectStrOrReferral(callback.From.ID, false)
 	}
 }
 
@@ -50,11 +52,11 @@ func (h *CallbackHandler) Message(update tgbotapi.Update) {
 	//case "/start":
 	//	h.messenger.GetInfoStart(update)
 	case "/connect_str":
-		h.messenger.GetConnectStrOrReferral(update, false)
+		h.messenger.GetConnectStrOrReferral(update.Message.From.ID, false)
 	case "/instruction":
 		h.messenger.GetInstruction(update)
 	case "/referral":
-		h.messenger.GetConnectStrOrReferral(update, true)
+		h.messenger.GetConnectStrOrReferral(update.Message.From.ID, true)
 	case "/start referral":
 		h.messenger.GetInfoStart(update)
 	}
