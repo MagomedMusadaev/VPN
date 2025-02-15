@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -133,7 +134,7 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 	}
 }
 
-// GetInstruction - отправляет пользователю инструкции по подключению к VPN через бота
+// GetInstruction - отправляет пользователю инструкции по подключению к VPN через бота.
 func (m *MessengerBot) GetInstruction(update tgbotapi.Update) {
 	const op = "internal/bot/messages.go/GetInstruction"
 
@@ -224,7 +225,7 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 	)
 }
 
-// CreatePayment - формирует ссылку на оплату с metadata для ЮКассы
+// CreatePayment - формирует ссылку на оплату с metadata для ЮКассы.
 func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string, error) {
 	const op = "internal/bot/messages.go/CreatePayment"
 
@@ -271,8 +272,8 @@ func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string,
 }
 
 // ManageUserDataAfterPayment - обрабатывает оплату пользователя и управляет его данными.
-func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) { // TODO переписать логику метода польностью
-	const op = "internal/bot/messages.go/ManageUserKeyAfterPayment"
+func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
+	const op = "internal/bot/messages.go/ManageUserDataAfterPayment"
 
 	// Преобразуем userTgID из строки в int
 	intUserID, err := strconv.Atoi(userTgID)
@@ -306,7 +307,7 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) { // T
 	if !exists {
 
 		// Генерируем ключ для пользователя
-		key, err := m.GenerateKey(userTgID)
+		key, keyID, err := m.GenerateKey(userTgID)
 		if err != nil && key == "" {
 			return
 		}
@@ -315,6 +316,7 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) { // T
 		keyRecord := &entities.Key{
 			UserTgID:  intUserID,
 			Key:       key + "#KeeperVPN",
+			KeyID:     keyID,
 			CreatedAt: time.Now(),
 			ExpiresAt: time.Now().Add(expirationTime),
 		}
@@ -351,6 +353,28 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) { // T
 		return
 	}
 
+	// Получаем URL API для запроса к серверу
+	url := os.Getenv("API_URL") // url сервера с outline
+	if url == "" {
+		slog.Warn(op, "API_URL пуст")
+		return
+	}
+
+	// делаем запрос по user_id в таблицу keys и вытаскиваем keyID
+	keyID, err := m.repo.GetKeyIDByUserID(userTgID)
+	if err != nil {
+		return
+	}
+
+	// Убираем ограничение по ключу в Outline Manager
+	if err = m.httpRequest.RemoveOutlineKeyLimit(keyID, url); err != nil {
+		return
+	}
+
+	if err = m.repo.UpdateProcessedKey(keyID, false); err != nil {
+		return
+	}
+
 	// Формируем сообщение для пользователя о новом сроке действия
 	message := fmt.Sprintf("Ваш ключ успешно продлён до %s.", newExpiration.Format("02.01.2006 15:04"))
 
@@ -365,15 +389,15 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) { // T
 	slog.Info("Срок действия ключа успешно обновлён", slog.Int("user_id", intUserID))
 }
 
-// GenerateKey - функция генерации нового ключа
-func (m *MessengerBot) GenerateKey(userTgID string) (string, error) {
+// GenerateKey - функция генерации нового ключа.
+func (m *MessengerBot) GenerateKey(userTgID string) (string, string, error) {
 	const op = "internal/bot/messages.go/GenerateKey"
 
 	// Получаем URL API для запроса к серверу
 	URL := os.Getenv("API_URL") // url сервера с outline
 	if URL == "" {
 		slog.Warn(op, "API_URL пуст")
-		return "", errors.New("API_URL is empty") // Возвращаем ошибку, если переменная окружения пустая
+		return "", "", errors.New("API_URL is empty") // Возвращаем ошибку, если переменная окружения пустая
 	}
 
 	payload := entities.NewKeyPayload(userTgID)
@@ -386,9 +410,9 @@ func (m *MessengerBot) GenerateKey(userTgID string) (string, error) {
 	apiURL := fmt.Sprintf("%s/access-keys", URL)
 
 	// Отправляем запрос на получение ключа
-	key, err := m.httpRequest.SendKeyRequest(apiURL, payload)
+	key, keyID, err := m.httpRequest.SendKeyRequest(apiURL, payload)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// Формируем сообщение с ключом
@@ -398,7 +422,7 @@ func (m *MessengerBot) GenerateKey(userTgID string) (string, error) {
 	chatID, err := strconv.ParseInt(userTgID, 10, 64)
 	if err != nil {
 		slog.Error(op, "Ошибка парсинга userTgID", err)
-		return key, err // Возвращаем ключ, так как это не мешает его отправке
+		return key, keyID, err // Возвращаем ключ, так как это не мешает его отправке
 	}
 
 	// Отправляем сообщение пользователю
@@ -407,14 +431,14 @@ func (m *MessengerBot) GenerateKey(userTgID string) (string, error) {
 
 	if _, err = m.botAPI.Send(msg); err != nil {
 		slog.Error(op, "Ошибка при отправке сообщения пользователю", err)
-		return key, err // Возвращаем ключ, несмотря на ошибку отправки сообщения
+		return key, keyID, err // Возвращаем ключ, несмотря на ошибку отправки сообщения
 	}
 
 	// Логируем успешную отправку ключа
 	slog.Info("Ключ успешно отправлен", "userID", userTgID)
 
 	// Возвращаем полученный ключ
-	return key, nil
+	return key, keyID, nil
 }
 
 // GetConnectStrOrReferral - функция для выдачи существующего ключа подключения или реферальной ссылки пользователю.
@@ -544,6 +568,51 @@ func (m *MessengerBot) Answer(callback *tgbotapi.CallbackQuery) {
 	// Отправляем новую клавиатуру
 	if _, err := m.botAPI.Send(editMsgKeyboard); err != nil {
 		slog.Error(op, "ошибка отправки клавиатуры:", err)
+	}
+}
+
+// SetLimitForExpiredKeys - функция-ticket для установления лимита просроченных ключей.
+func (m *MessengerBot) SetLimitForExpiredKeys() {
+	const op = "internal/bot/messages.go/SetLimitForExpiredKeys"
+
+	ticker := time.NewTicker(time.Hour * 12)
+	defer ticker.Stop()
+
+	// Получаем URL API для запроса к серверу
+	url := os.Getenv("API_URL") // url сервера с outline
+	if url == "" {
+		slog.Warn(op, "API_URL пуст")
+		return
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			// Идем в базу и вытаскиваем key_id_outline для всех просроченных ключей
+			expiredKeysID, err := m.repo.GetExpirationTimeKeysID()
+			if err != nil {
+				continue
+			}
+
+			// Параллельно делаем HTTP-запросы к Outline Manager и ставим лимиты
+			var wg sync.WaitGroup
+			for _, keyID := range expiredKeysID {
+				wg.Add(1)
+				go func(keyIDCopy int) {
+					defer wg.Done()
+					err = m.httpRequest.AddedOutlineKeyLimit(strconv.Itoa(keyIDCopy), url)
+					if err != nil {
+						return
+					}
+					if err = m.repo.UpdateProcessedKey(keyIDCopy, true); err != nil {
+						return
+					}
+				}(keyID)
+			}
+
+			// Ждем завершения всех горутин
+			wg.Wait()
+		}
 	}
 }
 

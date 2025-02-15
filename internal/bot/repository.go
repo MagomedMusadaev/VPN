@@ -3,6 +3,7 @@ package bot
 import (
 	"bot_vpn/internal/entities"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"time"
 )
@@ -85,9 +86,9 @@ func (r *Repo) CreateUser(user *entities.User) error {
 func (r *Repo) SaveUserKey(key *entities.Key) error {
 	const op = "internal/bot/repository.go/SaveUserKey"
 
-	query := `INSERT INTO keys (user_id, key, created_at, expires_at) VALUES($1, $2, $3, $4)`
+	query := `INSERT INTO keys (user_id, key, created_at, expires_at, key_id_outline) VALUES($1, $2, $3, $4, $5)`
 
-	_, err := r.db.Exec(query, key.UserTgID, key.Key, key.CreatedAt, key.ExpiresAt)
+	_, err := r.db.Exec(query, key.UserTgID, key.Key, key.CreatedAt, key.ExpiresAt, key.KeyID)
 	if err != nil {
 		slog.Error(op, slog.String("error", err.Error()))
 		return err
@@ -132,6 +133,80 @@ func (r *Repo) GetExpirationTimeKey(userTgID int) (time.Time, error) {
 	}
 
 	return expiresAt, nil
+}
+
+// GetExpirationTimeKeysID - функция для получения keyID ключей, которые протухли.
+func (r *Repo) GetExpirationTimeKeysID() ([]int, error) {
+	const op = "internal/bot/repository.go/GetExpirationTimeKeysID"
+
+	query := `SELECT key_id_outline FROM keys WHERE expires_at < NOW() AND processed = false`
+
+	rows, _ := r.db.Query(query)
+	defer rows.Close()
+
+	// Проверяем, есть ли данные в rows
+	if !rows.Next() {
+		slog.Info("Нет протухших ключей")
+		return []int{}, nil
+	}
+
+	// Если данные есть, начинаем обработку
+	var expiredKeys []int
+	var keyID int
+
+	// Так как мы уже один раз вызвали rows.Next(), сначала обрабатываем первую строку
+	if err := rows.Scan(&keyID); err != nil {
+		slog.Error(op, "Ошибка чтения key_id_outline", err)
+		return nil, err
+	}
+	expiredKeys = append(expiredKeys, keyID)
+
+	// Далее продолжаем читать остальные строки
+	for rows.Next() {
+		if err := rows.Scan(&keyID); err != nil {
+			slog.Error(op, "Ошибка чтения key_id_outline", err)
+			return nil, err
+		}
+		expiredKeys = append(expiredKeys, keyID)
+	}
+
+	if err := rows.Err(); err != nil {
+		slog.Error(op, "Ошибка при итерации по строкам", err)
+		return nil, err
+	}
+
+	return expiredKeys, nil
+}
+
+// UpdateProcessedKey - функция которая меняет флажок processed для ключа.
+func (r *Repo) UpdateProcessedKey(keyID int, flag bool) error {
+	const op = "internal/bot/repository.go/UpdateProcessedKey"
+
+	query := `UPDATE keys SET processed = $1 WHERE key_id_outline = $2`
+
+	result, err := r.db.Exec(query, flag, keyID)
+	if err != nil {
+		slog.Error(op, "Ошибка при обновлении processed", err)
+		return err
+	}
+
+	// Проверяем, были ли обновлены строки
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		slog.Error(op, "Ошибка получения количества обновленных строк", err)
+		return err
+	}
+
+	if rowsAffected == 0 {
+		slog.Warn(op, "Не найден ключ с таким key_id_outline", "keyID", keyID)
+		return fmt.Errorf("ключ с key_id_outline=%d не найден", keyID)
+	}
+
+	slog.Info(op, "Флажок processed успешно обновлён",
+		slog.Int("keyID", keyID),
+		slog.Bool("flag", flag),
+	)
+	return nil
 }
 
 // UpdateKeyExpiration - функция обновления(продления) времени истечения ключа пользователя.
@@ -181,4 +256,19 @@ func (r *Repo) GetConnectKeyOrReferral(userTgID int64, referral bool) (string, e
 
 	// Возвращаем полученный ключ подключения
 	return connectionKeyOrReferral, nil
+}
+
+// GetKeyIDByUserID - функция для получения id ключа в outline.
+func (r *Repo) GetKeyIDByUserID(userID string) (int, error) {
+	const op = "internal/bot/repository.go/GetKeyIDByUserID"
+
+	query := `SELECT key_id_outline FROM keys WHERE user_id = $1`
+
+	var keyID int
+	if err := r.db.QueryRow(query, userID).Scan(&keyID); err != nil {
+		slog.Error(op, "Ошибка выдачи keyID по userID", err)
+		return 0, err
+	}
+
+	return keyID, nil
 }

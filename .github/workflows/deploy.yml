@@ -27,7 +27,7 @@ jobs:
             docker-compose down
             
             # Создаём .env файл с переменными из GitHub Secrets
-            cat > .env <<EOL
+            cat > docker/.env <<EOL
             BOT_TOKEN=${{ secrets.BOT_TOKEN }}
             API_URL=${{ secrets.API_URL }}
             PORT=${{ secrets.PORT }}

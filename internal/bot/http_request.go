@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 type HttpRequestInt interface {
 	SendKeyRequest(apiURL string, payload entities.KeyPayload) (string, error)
 	GetPaymentURL(jsonData []byte, shopID, secretKey, tgUserID string) (string, error)
+	RemoveOutlineKeyLimit(userID int, url string) error
 }
 
 type HttpRequest struct {
@@ -42,21 +44,21 @@ func createInsecureHTTPClient() *http.Client {
 }
 
 // SendKeyRequest - функция генерации ключа подключения.
-func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload) (string, error) { // TODO: нужно дорабоать (возможно)
+func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload) (string, string, error) { // TODO: нужно дорабоать (возможно)
 	const op = "internal/bot/http_request/SendKeyRequest"
 
 	// Сериализация полезной нагрузки в JSON.
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		slog.Error(op, "Ошибка сериализации полезной нагрузки", slog.String("error", err.Error()))
-		return "", err
+		return "", "", err
 	}
 
 	// Создание нового HTTP-запроса.
 	req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		slog.Error(op, "Ошибка создания HTTP-запроса", slog.String("error", err.Error()))
-		return "", err
+		return "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -67,25 +69,104 @@ func (h *HttpRequest) SendKeyRequest(apiURL string, payload entities.KeyPayload)
 	resp, err := client.Do(req)
 	if err != nil {
 		slog.Error(op, "Ошибка выполнения HTTP-запроса", slog.String("error", err.Error()))
-		return "", err
+		return "", "", err
 	}
 	defer resp.Body.Close()
 
 	// Проверка статуса ответа.
 	if resp.StatusCode != http.StatusCreated {
 		slog.Error(op, "Неверный статус ответа", slog.Int("status_code", resp.StatusCode))
-		return "", fmt.Errorf("получен статус %d, ожидался %d", resp.StatusCode, http.StatusCreated)
+		return "", "", fmt.Errorf("получен статус %d, ожидался %d", resp.StatusCode, http.StatusCreated)
 	}
 
 	// Распаковка ответа.
 	var respBody entities.RespBodyKey
 	if err = json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
 		slog.Error(op, "Ошибка декодирования тела ответа", slog.String("error", err.Error()))
-		return "", err
+		return "", "", err
 	}
 
 	// Возвращаем ключ из ответа.
-	return respBody.Key, nil
+	return respBody.Key, respBody.ID, nil
+}
+
+// AddedOutlineKeyLimit - функция для установления ограничения ключа подключения.
+func (h *HttpRequest) AddedOutlineKeyLimit(keyID string, url string) error {
+	const op = "internal/bot/http_request/AddedOutlineKeyLimit"
+
+	// Формируем полный URL для запроса
+	apiURL := fmt.Sprintf("%s/access-keys/%s/data-limit", url, keyID)
+
+	fmt.Println("ВОТ:", apiURL)
+
+	// Формируем тело запроса с ограничением (например, 10000 байт).
+	requestBody := `{"limit": {"bytes": 1048576}}` // 1 МБ
+
+	// Создание нового HTTP-запроса.
+	req, err := http.NewRequest("PUT", apiURL, bytes.NewBuffer([]byte(requestBody)))
+	if err != nil {
+		slog.Error(op, err)
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Используем HTTP-клиент с отключенной проверкой SSL.
+	client := createInsecureHTTPClient()
+
+	// Выполнение HTTP-запроса.
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error(op, err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Проверка статуса ответа.
+	if resp.StatusCode == http.StatusNotFound {
+		err = errors.New(fmt.Sprintf("неожиданный статус: %d", resp.StatusCode))
+		slog.Error(op, err)
+		return err
+	}
+
+	slog.Info("Ограничение по ключу %d успешно установлено\n", keyID)
+	return nil
+}
+
+// RemoveOutlineKeyLimit - функция для отмены ограничения ключа подключения.
+func (h *HttpRequest) RemoveOutlineKeyLimit(keyID int, url string) error {
+	const op = "internal/bot/http_request/RemoveOutlineKeyLimit"
+
+	// Формируем полный URL для запроса
+	apiURL := fmt.Sprintf("%s/access-keys/%d/data-limit", url, keyID)
+
+	// Создание нового HTTP-запроса.
+	req, err := http.NewRequest("DELETE", apiURL, nil)
+	if err != nil {
+		slog.Error(op, err)
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Используем HTTP-клиент с отключенной проверкой SSL.
+	client := createInsecureHTTPClient()
+
+	// Выполнение HTTP-запроса.
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error(op, err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Проверка статуса ответа.
+	if resp.StatusCode == http.StatusNotFound {
+		err = errors.New(fmt.Sprintf("неожиданный статус: %d", resp.StatusCode))
+		slog.Error(op, err)
+		return err
+	}
+
+	slog.Info("Ограничение по ключу %d успешно снято\n", keyID)
+	return nil
 }
 
 // GetPaymentURL - функци генерации ссылки оплаты на ЮКасса.

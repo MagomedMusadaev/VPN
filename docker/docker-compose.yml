@@ -9,6 +9,8 @@ services:
     container_name: bot-vpn
     ports:
       - "8085:8085"  # Если приложение использует HTTP-сервер
+    env_file:
+      - .env  # Использовать .env файл
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
       - API_URL=${API_URL}
