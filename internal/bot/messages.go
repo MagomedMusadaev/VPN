@@ -108,21 +108,25 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 	switch {
 	case err != nil && errors.Is(err, sql.ErrNoRows):
 		// У пользователя нет ключа
-		respMessage = "У вас нет активного ключа. Вы можете приобрести подписку."
+		respMessage = "❗ У вас нет активного ключа. Вы можете приобрести подписку."
 
 	case err == nil && time.Now().After(expirationTime):
 		// Если ключ истёк
-		respMessage = "Ваш ключ истёк. Продлите подписку, чтобы продолжить пользоваться сервисом."
+		respMessage = "❌ Ваш ключ истёк. Продлите подписку, чтобы продолжить пользоваться сервисом."
 
 	case err == nil:
 		// Если всё в порядке
-		respMessage = fmt.Sprintf("🔹 Ваша подписка активна до %s", expirationTime.Format("02.01.2006 15:04:05"))
+		respMessage = fmt.Sprintf(
+			"🔹 *Ваша подписка активна до:* \n"+
+				"           `%s`",
+			expirationTime.Format("02.01.2006 15:04:05"),
+		)
 	}
 
 	welcomeMessage := fmt.Sprintf(
-		"🎉 Добро пожаловать в Keeper VPN!\n\n"+
+		"🎉 *Добро пожаловать в Keeper VPN!* \n\n"+
 			"%s\n\n"+
-			"✅ Оставайтесь под защитой без ограничений!",
+			"*Мы рады, что вы с нами!* 😊\n",
 		respMessage,
 	)
 
@@ -130,6 +134,7 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 
 	// Отправляем сообщение с клавиатурой
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMessage)
+	msg.ParseMode = "Markdown"
 	msg.ReplyMarkup = keyboard // Используем клавиатуру
 
 	if _, err := m.botAPI.Send(msg); err != nil {
@@ -191,9 +196,9 @@ func (m *MessengerBot) SendPaymentInfoWithButton(callback *tgbotapi.CallbackQuer
 
 	//Текст сообщения с информацией о тарифе
 	text := fmt.Sprintf(
-		"<b>💵 Оплата </b> \n"+
-			"Вы выбрали тариф на %s. 💎 \n"+
-			"Стоимость: %d рублей. 💳 \n",
+		"<b>💵 Оплата</b>\n"+
+			"<b>Тариф:</b> %s 💎\n"+
+			"<b>Стоимость:</b> %d ₽ 💳\n\n",
 		reqMount, price,
 	)
 
@@ -322,7 +327,7 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		}
 
 		// Формируем сообщение с ключом
-		text := fmt.Sprintf("Ваш ключ доступа:\n```%s```", key+"#KeeperVPN")
+		text := fmt.Sprintf("🔑 *Ваш ключ доступа:* \n```%s```", key+"#KeeperVPN")
 
 		// Преобразуем userTgID в chatID (они одинаковы)
 		chatID, err := strconv.ParseInt(userTgID, 10, 64)
@@ -408,11 +413,19 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		return
 	}
 
+	expirationDate := expiresAt.Format("02.01.2006 15:04")
+
 	// Формируем сообщение для пользователя о новом сроке действия
-	message := fmt.Sprintf("Ваш ключ успешно продлён до %s.", newExpiration.Format("02.01.2006 15:04"))
+	text := fmt.Sprintf(
+		"🎉 *Ваш ключ успешно продлён!* 🎉\n\n"+
+			"📅 *Ключ действителен до: * `%s`.\n\n"+
+			"Спасибо, что остаетесь с нами! Мы ценим вашу поддержку! 😊",
+		expirationDate,
+	)
+	msg := tgbotapi.NewMessage(int64(intUserID), text)
+	msg.ParseMode = "Markdown"
 
 	// Отправляем сообщение пользователю
-	msg := tgbotapi.NewMessage(int64(intUserID), message)
 	if _, err := m.botAPI.Send(msg); err != nil {
 		// Логируем ошибку отправки сообщения
 		slog.Error(op, "ошибка отправки сообщения:", err)
@@ -471,7 +484,6 @@ func (m *MessengerBot) AddReferralSubscriptionDays(userID string, expirationTime
 
 		// Уведомляем пользователя о продлении времени действия ключа
 		if err = m.NotifyUserAboutReferralPurchase(strReferralUserID, newExpiration); err != nil {
-			slog.Error("Ошибка при отправке уведомления о продлении ключа", "userID", referralUserID, "error", err)
 			return
 		}
 
@@ -545,10 +557,9 @@ func (m *MessengerBot) NotifyUserAboutReferralPurchase(userTgID string, expiresA
 			MessageID: lastSentMessageID,
 		}
 		// Отправляем запрос на удаление старого сообщения
-		_, err := m.botAPI.Request(deleteMsgConfig)
+		_, err = m.botAPI.Request(deleteMsgConfig)
 		if err != nil {
-			slog.Error(op, slog.String("Ошибка при удалении старого сообщения", err.Error()))
-			return err
+			slog.Warn(op, slog.String("Ошибка при удалении старого сообщения", err.Error()))
 		}
 	}
 
@@ -670,10 +681,10 @@ func (m *MessengerBot) GetConnectStrOrReferral(userTgID int64, referral bool) {
 
 	// Логируем успешную отправку ключа или реферальной ссылки
 	if referral {
-		text = fmt.Sprintf("Ваша реферальная ссылка:\n```%s```", keyOrReferral)
+		text = fmt.Sprintf("🎉 *Ваша реферальная ссылка для приглашения:* \n```%s```", keyOrReferral)
 	} else {
 		// Если ключ найден, отправляем его пользователю
-		text = fmt.Sprintf("Ваш ключ доступа:\n```%s```", keyOrReferral)
+		text = fmt.Sprintf("🔑 *Ваш ключ доступа:* \n```%s```", keyOrReferral)
 	}
 
 	// Создаем сообщение и устанавливаем ParseMode
