@@ -65,18 +65,24 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 
 	// Если пользователя нет в базе
 	if !exists {
-		welcomeMessage := "🎉 Приветствуем тебя в Keeper VPN! 🎉\n\n" +
-			"🚀 Обеспечь себе безлимитный и быстрый VPN.\n\n" +
-			"Для подключения:\n\n" +
-			"📌 Выберите тариф\n" +
-			"💳 Оплатите план\n" +
-			"🛠️ Следуйте простым инструкциям\n\n"
+		welcomeMessage := "🎉 *Добро пожаловать в Keeper VPN!* 🎉\n\n" +
+			"🔒 *Ваша безопасность — наш приоритет.*\n" +
+			"Оставайтесь анонимными и свободными в интернете!\n\n" +
+			"🚀 *Как подключиться:*\n\n" +
+			"📌 *Выберите тариф* \n" +
+			"💳 *Оплатите удобным способом* \n" +
+			"⚡️ *Подключитесь за пару минут* \n\n" +
+			"✅ *Наслаждайтесь:*\n" +
+			"   🔹 Быстрым и безлимитным VPN\n" +
+			"   🔹 Полной анонимностью\n" +
+			"   🔹 Защитой от слежки и блокировок\n\n" +
+			"🔥 *Keeper VPN — ваш личный щит в сети!*"
 
 		keyboard := m.keyBoard.GetTariffKeyboard()
 
 		// Отправляем сообщение с клавиатурой
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMessage)
-		msg.ReplyMarkup = "Markdown" // Чтобы использовать жирный шрифт и эмодзи
+		msg.ParseMode = "Markdown" // Чтобы использовать жирный шрифт и эмодзи
 		msg.ReplyMarkup = keyboard
 
 		if _, err = m.botAPI.Send(msg); err != nil {
@@ -108,25 +114,30 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 	switch {
 	case err != nil && errors.Is(err, sql.ErrNoRows):
 		// У пользователя нет ключа
-		respMessage = "❗ У вас нет активного ключа. Вы можете приобрести подписку."
+		respMessage = "🔑 *У вас нет активного ключа!*\n\n" +
+			"❗ *Оформите подписку, чтобы получить доступ к VPN без ограничений.*\n\n" +
+			"🔹 *Выберите тариф, оплатите — и вы в сети!*"
 
 	case err == nil && time.Now().After(expirationTime):
 		// Если ключ истёк
-		respMessage = "❌ Ваш ключ истёк. Продлите подписку, чтобы продолжить пользоваться сервисом."
+		respMessage =
+			"⚠️ *Доступ заблокирован* \n\n" +
+				"❌ *Ваш ключ истёк!* \n\n" +
+				"🔄 *Продлите подписку, чтобы продолжить пользоваться сервисом.*"
 
 	case err == nil:
 		// Если всё в порядке
 		respMessage = fmt.Sprintf(
 			"🔹 *Ваша подписка активна до:* \n"+
-				"           `%s`",
+				"           `%s`\n\n"+
+				"*Мы рады, что вы с нами!* 😊\n",
 			expirationTime.Format("02.01.2006 15:04:05"),
 		)
 	}
 
 	welcomeMessage := fmt.Sprintf(
 		"🎉 *Добро пожаловать в Keeper VPN!* \n\n"+
-			"%s\n\n"+
-			"*Мы рады, что вы с нами!* 😊\n",
+			"%s",
 		respMessage,
 	)
 
