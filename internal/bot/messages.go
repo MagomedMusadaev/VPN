@@ -245,7 +245,7 @@ func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string,
 	// Формируем тело запроса
 	requestData := entities.PaymentRequest{
 		Capture:     true,
-		Description: "Оплата подписки на " + reqMount,
+		Description: "Оплата на " + reqMount,
 		Amount: entities.Amount{
 			Value:    amount,
 			Currency: "RUB",
