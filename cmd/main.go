@@ -100,19 +100,6 @@ func initBotAPI() (*tgbotapi.BotAPI, tgbotapi.UpdatesChannel, error) {
 	return botAPI, updates, nil
 }
 
-//TODO
-// ХРАНИМ:
-// chat_id BIGINT UNIQUE NOT NULL,            -- Уникальный идентификатор пользователя в Telegram
-// user_tg_id BIGINT NOT NULL,               -- Telegram ID пользователя (не всегда совпадает с chat_id, если в группе)
-// НЕ ХРАНИИМ:
-// id SERIAL PRIMARY KEY,                    -- Уникальный идентификатор записи
-// key_id INT UNIQUE NOT NULL,                -- ID ключа в системе Outline Manager
-// key VARCHAR(255) NOT NULL,                 -- Ключ подключения (например, токен или идентификатор)
-// key_status VARCHAR(50) NOT NULL,           -- Статус ключа (например, активен, истёк, ограничен)
-// key_start_date TIMESTAMP NOT NULL,        -- Дата начала действия ключа
-// key_expiry_date TIMESTAMP NOT NULL,       -- Дата истечения действия ключа
-// created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Дата первой записи данных пользователя
-
 //Таблица users (Пользователи)
 //Поле						Тип данных									Описание
 //id						SERIAL (Primary Key)						Уникальный ID пользователя в базе

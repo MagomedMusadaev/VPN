@@ -430,7 +430,8 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 	text := fmt.Sprintf(
 		"🎉 *Ваш ключ успешно продлён!* 🎉\n\n"+
 			"📅 *Ключ действителен до: * `%s`.\n\n"+
-			"Спасибо, что остаетесь с нами! Мы ценим вашу поддержку! 😊",
+			"Спасибо, что остаетесь с нами!"+
+			"Мы ценим вашу поддержку! 😊",
 		expirationDate,
 	)
 	msg := tgbotapi.NewMessage(int64(intUserID), text)
