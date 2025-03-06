@@ -122,3 +122,4 @@ func initBotAPI() (*tgbotapi.BotAPI, tgbotapi.UpdatesChannel, error) {
 //CREATE INDEX idx_referral_code ON users(referral_code);
 //CREATE INDEX idx_telegram_id ON users(telegram_id);
 //CREATE INDEX idx_referred_by ON users(referred_by); - В ДАЛЁКОМ БУДУШЕМ (ЕСЛИ ПРОЕКТ БУДЕТ ЖИТЬ)
+//
