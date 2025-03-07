@@ -46,6 +46,7 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 
 	userID := update.Message.From.ID
 	referralID := update.Message.CommandArguments() // Получаем реферальный ID
+	nickname := update.Message.From.UserName
 
 	var referredBy int
 	if referralID != "" {
@@ -96,6 +97,7 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 			ReferralCode: "https://t.me/keeper_vpn_bot?start=" + strconv.Itoa(int(userID)),
 			CreatedAt:    time.Now(),
 			ReferredBy:   referredBy,
+			Nickname:     nickname,
 		}
 
 		// Сохраняем пользователя в базе данных

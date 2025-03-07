@@ -9,6 +9,7 @@ type User struct {
 	ReferralCode string    `db:"referral_code"`
 	CreatedAt    time.Time `db:"created_at"` // Дата первой записи данных пользователя
 	ReferredBy   int       `db:"referred_by"`
+	Nickname     string    `json:"nickname"`
 }
 
 // NewUser - конструктор для User
@@ -18,6 +19,7 @@ func NewUser(
 	referralCode string,
 	createdAt time.Time,
 	referredBy int,
+	nickname string,
 ) User {
 	return User{
 		UserTgID:     userTgID,
@@ -25,5 +27,6 @@ func NewUser(
 		ReferralCode: referralCode,
 		CreatedAt:    createdAt,
 		ReferredBy:   referredBy,
+		Nickname:     nickname,
 	}
 }

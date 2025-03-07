@@ -85,9 +85,9 @@ func (r *Repo) GetUserReferral(userID int) (int, error) {
 func (r *Repo) CreateUser(user *entities.User) error {
 	const op = "internal/bot/repository.go/CreateUser"
 
-	query := `INSERT INTO users (telegram_id, chat_id, referral_code, created_at, referred_by) VALUES($1, $2, $3, $4, $5)`
+	query := `INSERT INTO users (telegram_id, chat_id, referral_code, created_at, referred_by, nickname) VALUES($1, $2, $3, $4, $5, $6)`
 
-	_, err := r.db.Exec(query, user.UserTgID, user.ChatTgID, user.ReferralCode, user.CreatedAt, user.ReferredBy)
+	_, err := r.db.Exec(query, user.UserTgID, user.ChatTgID, user.ReferralCode, user.CreatedAt, user.ReferredBy, user.Nickname)
 	if err != nil {
 		slog.Error(op, slog.String("error", err.Error()))
 		return err
