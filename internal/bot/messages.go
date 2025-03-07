@@ -274,7 +274,7 @@ func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string,
 			"user_tg_id": tgUserID,
 		},
 		Receipt: entities.Receipt{ // Добавляем чек
-			Email: tgUserID, // Укажи email пользователя ( в нашем случае userID)
+			Email: tgUserID + "@gmail.com", // Укажи email пользователя ( в нашем случае userID)
 			Items: []entities.ReceiptItem{
 				{
 					Description: "Подписка на сервис",
