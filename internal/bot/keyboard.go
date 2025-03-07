@@ -4,7 +4,8 @@ import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 type KeyBoardInt interface {
 	GetTariffKeyboard() tgbotapi.InlineKeyboardMarkup
-	GetStartButton() tgbotapi.InlineKeyboardMarkup
+	GetStartButtonWithKey() tgbotapi.InlineKeyboardMarkup
+	GetStartButtonWithoutKey() tgbotapi.InlineKeyboardMarkup
 }
 
 type KeyBoard struct {
@@ -39,12 +40,25 @@ func (k *KeyBoard) GetTariffKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(buttons...)
 }
 
-// GetStartButton -  возвращает клавиатуру с кнопками если user уже является пользователем.
-func (k *KeyBoard) GetStartButton() tgbotapi.InlineKeyboardMarkup {
+// GetStartButtonWithKey -  возвращает клавиатуру с кнопками если user уже является пользователем.
+func (k *KeyBoard) GetStartButtonWithKey() tgbotapi.InlineKeyboardMarkup {
 	// Создаём кнопки.
 	buttons := [][]tgbotapi.InlineKeyboardButton{
 		{
 			tgbotapi.NewInlineKeyboardButtonData("💰 Продлить", "answer"),
+		},
+	}
+
+	// Возвращаем разметку с кнопками.
+	return tgbotapi.NewInlineKeyboardMarkup(buttons...)
+}
+
+// GetStartButtonWithoutKey -  возвращает клавиатуру с кнопками если user ещё не является пользователем.
+func (k *KeyBoard) GetStartButtonWithoutKey() tgbotapi.InlineKeyboardMarkup {
+	// Создаём кнопки.
+	buttons := [][]tgbotapi.InlineKeyboardButton{
+		{
+			tgbotapi.NewInlineKeyboardButtonData("💰 Купить", "answer"),
 		},
 	}
 

@@ -49,8 +49,6 @@ func (h *CallbackHandler) Message(update tgbotapi.Update) {
 	}
 
 	switch update.Message.Text {
-	//case "/start":
-	//	h.messenger.GetInfoStart(update)
 	case "/connect_str":
 		h.messenger.GetConnectStrOrReferral(update.Message.From.ID, false)
 	case "/instruction":

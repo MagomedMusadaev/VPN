@@ -107,6 +107,7 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 		return
 	}
 
+	var flag bool
 	var respMessage string
 	expirationTime, err := m.repo.GetExpirationTimeKey(int(userID))
 
@@ -117,6 +118,7 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 		respMessage = "🔑 *У вас нет активного ключа!*\n\n" +
 			"❗ *Оформите подписку, чтобы получить доступ к VPN без ограничений.*\n\n" +
 			"🔹 *Выберите тариф, оплатите — и вы в сети!*"
+		flag = true
 
 	case err == nil && time.Now().After(expirationTime):
 		// Если ключ истёк
@@ -141,7 +143,11 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 		respMessage,
 	)
 
-	keyboard := m.keyBoard.GetStartButton()
+	keyboard := m.keyBoard.GetStartButtonWithKey()
+
+	if flag {
+		keyboard = m.keyBoard.GetStartButtonWithoutKey()
+	}
 
 	// Отправляем сообщение с клавиатурой
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMessage)
