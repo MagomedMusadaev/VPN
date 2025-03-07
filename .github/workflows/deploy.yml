@@ -44,4 +44,4 @@ jobs:
             YK_SECRET_KEY=${{ secrets.YK_SECRET_KEY }}
             EOL
             
-            DOCKER_BUILDKIT=1 docker-compose -f docker/docker-compose.yml --env-file .env up --build -d
+            docker-compose -f docker/docker-compose.yml --env-file .env up --build -d
