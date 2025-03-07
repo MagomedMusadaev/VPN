@@ -273,6 +273,22 @@ func (m *MessengerBot) CreatePayment(amount, tgUserID, reqMount string) (string,
 		Metadata: map[string]string{
 			"user_tg_id": tgUserID,
 		},
+		Receipt: entities.Receipt{ // Добавляем чек
+			Email: tgUserID, // Укажи email пользователя ( в нашем случае userID)
+			Items: []entities.ReceiptItem{
+				{
+					Description: "Подписка на сервис",
+					Quantity:    1,
+					Amount: entities.Amount{
+						Value:    amount,
+						Currency: "RUB",
+					},
+					VATCode:        6,              // Код НДС (1 = 20%, 2 = 10%, 6 = без НДС)
+					PaymentMode:    "full_payment", // Полная оплата
+					PaymentSubject: "service",      // Тип товара (услуга)
+				},
+			},
+		},
 	}
 
 	jsonData, err := json.Marshal(requestData)
