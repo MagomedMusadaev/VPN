@@ -37,6 +37,8 @@ func (h *CallbackHandler) Button(callback *tgbotapi.CallbackQuery) {
 		h.messenger.Answer(callback)
 	case "get_referral":
 		h.messenger.GetConnectStrOrReferral(callback.From.ID, true)
+	case "connect_str":
+		h.messenger.GetConnectStrOrReferral(callback.From.ID, false)
 	}
 }
 

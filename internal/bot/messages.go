@@ -577,7 +577,7 @@ func (m *MessengerBot) NotifyUserAboutReferralPurchase(userTgID string, expiresA
 	)
 
 	// Создаём кнопку для активации команды
-	button := tgbotapi.NewInlineKeyboardButtonData("🔑 Получить ключ", "get_referral")
+	button := tgbotapi.NewInlineKeyboardButtonData("🔑 Получить ключ", "connect_str")
 	keyboard := tgbotapi.NewInlineKeyboardMarkup([]tgbotapi.InlineKeyboardButton{button})
 
 	// Получаем ID последнего отправленного сообщения из Redis
