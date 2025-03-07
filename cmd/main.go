@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -53,10 +54,10 @@ func main() {
 
 	go messenger.SetLimitForExpiredKeys()
 
-	//Инициализация маршрутов HTTP
+	// Инициализация маршрутов HTTP
 	bot.InitRout(httpHandler)
 
-	//Запуск HTTP-сервера
+	// Запуск HTTP-сервера
 	go func() {
 		slog.Info("Сервер запущен", slog.String("url", "http://localhost:"+port))
 		if err = http.ListenAndServe(":"+port, nil); err != nil {
@@ -64,6 +65,17 @@ func main() {
 			os.Exit(1) // Завершаем приложение, если сервер упал
 		}
 	}()
+
+	// Устанавливаем часовой пояс для всего приложения
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		slog.Error(op, "Ошибка загрузки часового пояса:", slog.String("error", err.Error()))
+		return
+	}
+
+	// Устанавливаем локальный часовой пояс по умолчанию
+	time.Local = loc
+	slog.Info("Текущее время по МСК", slog.Time("time", time.Now()))
 
 	// Основной цикл обработки обновлений Telegram
 	for update := range updates {
