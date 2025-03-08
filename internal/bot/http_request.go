@@ -97,8 +97,6 @@ func (h *HttpRequest) AddedOutlineKeyLimit(keyID string, url string) error {
 	// Формируем полный URL для запроса
 	apiURL := fmt.Sprintf("%s/access-keys/%s/data-limit", url, keyID)
 
-	fmt.Println("ВОТ:", apiURL)
-
 	// Формируем тело запроса с ограничением (например, 10000 байт).
 	requestBody := `{"limit": {"bytes": 1048576}}` // 1 МБ
 
@@ -128,7 +126,7 @@ func (h *HttpRequest) AddedOutlineKeyLimit(keyID string, url string) error {
 		return err
 	}
 
-	slog.Info("Ограничение по ключу %d успешно установлено\n", keyID)
+	slog.Info(fmt.Sprintf("Ограничение по ключу %v успешно установлено\n", keyID))
 	return nil
 }
 

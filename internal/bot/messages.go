@@ -125,9 +125,13 @@ func (m *MessengerBot) GetInfoStart(update tgbotapi.Update) {
 	case err == nil && time.Now().After(expirationTime):
 		// Если ключ истёк
 		respMessage =
-			"⚠️ *Доступ заблокирован* \n\n" +
-				"❌ *Ваш ключ истёк!* \n\n" +
-				"🔄 *Продлите подписку, чтобы продолжить пользоваться сервисом.*"
+			"⚠️ *К сожалению, доступ временно заблокирован.* \n\n" +
+				"❌ *Ваш ключ истёк, и вы больше не можете пользоваться сервисом.* \n\n" +
+				"💡 *Что делать дальше?*\n" +
+				"🔹 Нажмите на «Продлить».\n" +
+				"🔹 Выберите подходящий тариф и оплатите его.\n" +
+				"🔹 Наслаждайтесь безопасным и быстрым интернетом снова! 🚀\n\n" +
+				"🔄 *Продлите подписку прямо сейчас и вернитесь в сеть!*"
 
 	case err == nil:
 		// Если всё в порядке
@@ -448,13 +452,13 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		return
 	}
 
-	expirationDate := expiresAt.Format("02.01.2006 15:04")
+	expirationDate := newExpiration.Format("02.01.2006 15:04")
 
 	// Формируем сообщение для пользователя о новом сроке действия
 	text := fmt.Sprintf(
 		"🎉 *Ваш ключ успешно продлён!* 🎉\n\n"+
 			"📅 *Ключ действителен до: * `%s`.\n\n"+
-			"Спасибо, что остаетесь с нами!"+
+			"Спасибо, что остаетесь с нами!\n"+
 			"Мы ценим вашу поддержку! 😊",
 		expirationDate,
 	)
@@ -485,7 +489,7 @@ func (m *MessengerBot) AddReferralSubscriptionDays(userID string, expirationTime
 
 	// Получаем реферала пользователя
 	referralUserID, err := m.repo.GetUserReferral(intUserID)
-	if errors.Is(err, sql.ErrNoRows) {
+	if err != nil || referralUserID == 0 {
 		// Если реферала нет, просто выходим
 		return
 	}
@@ -709,10 +713,20 @@ func (m *MessengerBot) GetConnectStrOrReferral(userTgID int64, referral bool) {
 
 	// Логируем успешную отправку ключа или реферальной ссылки
 	if referral {
-		text = fmt.Sprintf("🎉 *Ваша реферальная ссылка для приглашения:* \n```%s```", keyOrReferral)
+		text = fmt.Sprintf("🎉 *Ваша реферальная ссылка:* \n\n```%s``` \n"+
+			"💡 *Как это работает:*\n\n"+
+			"🔹 Поделитесь ссылкой с друзьями.\n"+
+			"🔹 За *каждый купленный месяц подписки* вашим рефералом вы получаете *+4 бесплатных дня* к своей подписке!\n"+
+			"🔹 Чем больше друзей пригласите, тем больше бесплатных дней получите. 🚀\n\n"+
+			"✨ *Спасибо, что пользуетесь Keeper VPN!*", keyOrReferral)
 	} else {
 		// Если ключ найден, отправляем его пользователю
-		text = fmt.Sprintf("🔑 *Ваш ключ доступа:* \n```%s```", keyOrReferral)
+		text = fmt.Sprintf("🔑 *Ваш ключ доступа:* \n\n```%s``` \n"+
+			"💡 *Как использовать ключ:*\n\n"+
+			"🔹 Установите приложение *Outline*.\n"+
+			"🔹 Скопируйте ключ и вставьте его в приложение.\n"+
+			"🔹 Наслаждайтесь безопасным и быстрым интернетом! 🚀\n\n"+
+			"✨ *Спасибо, что пользуетесь Keeper VPN!*", keyOrReferral)
 	}
 
 	// Создаем сообщение и устанавливаем ParseMode
@@ -785,11 +799,15 @@ func (m *MessengerBot) SetLimitForExpiredKeys() {
 	for {
 		select {
 		case <-ticker.C:
+			slog.Info("Старт проверки истёкших ключей")
+
 			// Идем в базу и вытаскиваем key_id_outline для всех просроченных ключей
 			expiredKeysID, err := m.repo.GetExpirationTimeKeysID()
 			if err != nil {
 				continue
 			}
+
+			slog.Info(fmt.Sprintf("Найдено %v протухших ключей", len(expiredKeysID)))
 
 			// Параллельно делаем HTTP-запросы к Outline Manager и ставим лимиты
 			var wg sync.WaitGroup

@@ -70,12 +70,13 @@ func (r *Repo) GetUserReferral(userID int) (int, error) {
 
 	err := r.db.QueryRow(query, userID).Scan(&referralUserID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			slog.Warn(op, slog.String("message", "Нет реферала у пользователя"), slog.Int("userID", userID))
-			return 0, nil // Нет реферала — это не ошибка
-		}
 		slog.Error(op, slog.String("Ошибка запроса к БД", err.Error()))
 		return 0, err
+	}
+
+	if referralUserID == 0 {
+		slog.Warn(op, slog.String("message", "Нет реферала у пользователя"), slog.Int("userID", userID))
+		return 0, nil // Нет реферала — это не ошибка
 	}
 
 	return referralUserID, nil
@@ -216,7 +217,7 @@ func (r *Repo) UpdateProcessedKey(keyID int, flag bool) error {
 		return fmt.Errorf("ключ с key_id_outline=%d не найден", keyID)
 	}
 
-	slog.Info(op, "Флажок processed успешно обновлён",
+	slog.Info("Флажок processed успешно обновлён",
 		slog.Int("keyID", keyID),
 		slog.Bool("flag", flag),
 	)
