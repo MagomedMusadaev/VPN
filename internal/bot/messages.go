@@ -806,6 +806,44 @@ func (m *MessengerBot) Answer(callback *tgbotapi.CallbackQuery) {
 	}
 }
 
+// GetSupport - функция для отправки данных помощи и аккаунта support
+func (m *MessengerBot) GetSupport(callbackAndUpdate interface{}) {
+	const op = "internal/bot/messages.go/GetSupport"
+
+	var chatID int64
+
+	switch v := callbackAndUpdate.(type) {
+	case *tgbotapi.CallbackQuery:
+		chatID = v.Message.Chat.ID
+	case tgbotapi.Update:
+		if v.Message != nil {
+			chatID = v.Message.Chat.ID
+		}
+	}
+
+	// Сформированное сообщение с кнопкой
+	msgText := "💬 Нужна помощь? Свяжитесь с нашей поддержкой!"
+
+	// Создаём inline-кнопку с ссылкой на поддержку
+	supportButton := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonURL("🔗 Нажмите здесь, чтобы получить помощь!",
+				"https://t.me/Keeper_vpn_support"),
+		),
+	)
+
+	// Отправка сообщения пользователю
+	msg := tgbotapi.NewMessage(chatID, msgText)
+	msg.ReplyMarkup = supportButton
+
+	_, err := m.botAPI.Send(msg)
+	if err != nil {
+		slog.Error(op, "Ошибка отправки сообщения:", slog.String("error", err.Error()))
+		return
+	}
+	slog.Info(fmt.Sprintf("Сообщение с поддержкой отправлено пользователю: %v", chatID))
+}
+
 // SetLimitForExpiredKeys - функция-ticket для установления лимита просроченных ключей.
 func (m *MessengerBot) SetLimitForExpiredKeys() {
 	const op = "internal/bot/messages.go/SetLimitForExpiredKeys"

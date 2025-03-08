@@ -39,6 +39,8 @@ func (h *CallbackHandler) Button(callback *tgbotapi.CallbackQuery) {
 		h.messenger.GetConnectStrOrReferral(callback.From.ID, true)
 	case "connect_str":
 		h.messenger.GetConnectStrOrReferral(callback.From.ID, false)
+		//case "get_support":
+		//	h.messenger.GetSupport(callback)
 	}
 }
 
@@ -59,5 +61,7 @@ func (h *CallbackHandler) Message(update tgbotapi.Update) {
 		h.messenger.GetConnectStrOrReferral(update.Message.From.ID, true)
 	case "/start referral":
 		h.messenger.GetInfoStart(update)
+	case "/get_support":
+		h.messenger.GetSupport(update)
 	}
 }
