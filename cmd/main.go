@@ -17,7 +17,7 @@ func main() {
 
 	// Загрузка переменных окружения из .env файла
 	if err := godotenv.Load("F:\\bot_vpn\\.env"); err != nil {
-		slog.Error(op, "Ошибка загрузки .env файла", slog.String("error", err.Error()))
+		slog.Warn(op, "Ошибка загрузки .env файла", slog.String("error", err.Error()))
 	}
 
 	port := os.Getenv("PORT")

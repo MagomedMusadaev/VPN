@@ -443,21 +443,22 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 		return
 	}
 
-	// Убираем ограничение по ключу в Outline Manager
-	if err = m.httpRequest.RemoveOutlineKeyLimit(keyID, url); err != nil {
-		return
+	// Убираем ограничение по ключу в Outline Manager и меняем флажок processed на false, если ключ уже был недействительным
+	if now.After(expiresAt) {
+		if err = m.httpRequest.RemoveOutlineKeyLimit(keyID, url); err != nil {
+			return
+		}
+		if err = m.repo.UpdateProcessedKey(keyID, false); err != nil {
+			return
+		}
 	}
-
-	if err = m.repo.UpdateProcessedKey(keyID, false); err != nil {
-		return
-	}
-
 	expirationDate := newExpiration.Format("02.01.2006 15:04")
 
 	// Формируем сообщение для пользователя о новом сроке действия
 	text := fmt.Sprintf(
 		"🎉 *Ваш ключ успешно продлён!* 🎉\n\n"+
-			"📅 *Ключ действителен до: * `%s`.\n\n"+
+			"📅 *Ключ действителен до: * \n"+
+			"           `%s`\n\n"+
 			"Спасибо, что остаетесь с нами!\n"+
 			"Мы ценим вашу поддержку! 😊",
 		expirationDate,
@@ -523,10 +524,32 @@ func (m *MessengerBot) AddReferralSubscriptionDays(userID string, expirationTime
 		}
 
 		// Уведомляем пользователя о продлении времени действия ключа
-		if err = m.NotifyUserAboutReferralPurchase(strReferralUserID, newExpiration); err != nil {
+		if err = m.NotifyUserAboutReferralPurchase(strReferralUserID, newExpiration, expirationTime); err != nil {
 			return
 		}
 
+		// Получаем ID ключа outline по userID
+		keyID, err := m.repo.GetKeyIDByUserID(strReferralUserID)
+		if err != nil {
+			return
+		}
+
+		// Получаем URL API для запроса к серверу
+		url := os.Getenv("API_URL") // url сервера с outline
+		if url == "" {
+			slog.Warn(op, "API_URL пуст")
+			return
+		}
+
+		// меняем флажок processed на false, если ключ уже был недействительным
+		if now.After(expiresAt) {
+			if err = m.repo.UpdateProcessedKey(keyID, false); err != nil {
+				return
+			}
+			if err = m.httpRequest.RemoveOutlineKeyLimit(keyID, url); err != nil {
+				return
+			}
+		}
 		slog.Info("Время для реферала успешно обновлено")
 		return
 	}
@@ -551,7 +574,7 @@ func (m *MessengerBot) AddReferralSubscriptionDays(userID string, expirationTime
 	}
 
 	// Уведомляем пользователя о новом ключе
-	if err = m.NotifyUserAboutReferralPurchase(strReferralUserID, time.Now().Add(expirationTime)); err != nil {
+	if err = m.NotifyUserAboutReferralPurchase(strReferralUserID, time.Now().Add(expirationTime), expirationTime); err != nil {
 		return
 	}
 
@@ -559,7 +582,7 @@ func (m *MessengerBot) AddReferralSubscriptionDays(userID string, expirationTime
 }
 
 // NotifyUserAboutReferralPurchase - отправляет уведомление пользователю о том, что по его реферальной ссылке был куплен тариф.
-func (m *MessengerBot) NotifyUserAboutReferralPurchase(userTgID string, expiresAt time.Time) error {
+func (m *MessengerBot) NotifyUserAboutReferralPurchase(userTgID string, expiresAt time.Time, addTime time.Duration) error {
 	const op = "internal/bot/messenger.go/NotifyUserAboutReferralPurchase"
 
 	// Преобразуем userTgID в chatID
@@ -576,8 +599,9 @@ func (m *MessengerBot) NotifyUserAboutReferralPurchase(userTgID string, expiresA
 	text := fmt.Sprintf(
 		"🎉 *По вашей реферальной ссылке оформлен тариф!* 🎉\n\n"+
 			"📅 *Ключ действителен до:* `%s`\n\n"+
+			"📆 *Добавлено дней: * `%v`\n\n"+
 			"⬇️ Нажмите на кнопку ниже, чтобы получить ключ.",
-		expirationDate,
+		expirationDate, addTime.Hours()/24,
 	)
 
 	// Создаём кнопку для активации команды
