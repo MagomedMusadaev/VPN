@@ -53,6 +53,7 @@ func main() {
 	handler := bot.NewCallbackHandler(messenger)
 
 	go messenger.SetLimitForExpiredKeys()
+	go messenger.CheckAndNotifyExpiringKeys()
 
 	// Инициализация маршрутов HTTP
 	bot.InitRout(httpHandler)

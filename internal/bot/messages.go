@@ -454,6 +454,11 @@ func (m *MessengerBot) ManageUserDataAfterPayment(value, userTgID string) {
 	}
 	expirationDate := newExpiration.Format("02.01.2006 15:04")
 
+	// Меняем флажок expiration_notified на false
+	if err = m.repo.UpdateExpiringKey(intUserID, false); err != nil {
+		return
+	}
+
 	// Формируем сообщение для пользователя о новом сроке действия
 	text := fmt.Sprintf(
 		"🎉 *Ваш ключ успешно продлён!* 🎉\n\n"+
@@ -551,6 +556,9 @@ func (m *MessengerBot) AddReferralSubscriptionDays(userID string, expirationTime
 			}
 		}
 		slog.Info("Время для реферала успешно обновлено")
+
+		// Меняем флажок expiration_notified на false
+		m.repo.UpdateExpiringKey(referralUserID, false)
 		return
 	}
 
@@ -825,12 +833,7 @@ func (m *MessengerBot) GetSupport(callbackAndUpdate interface{}) {
 	msgText := "💬 Нужна помощь? Свяжитесь с нашей поддержкой!"
 
 	// Создаём inline-кнопку с ссылкой на поддержку
-	supportButton := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonURL("🔗 Нажмите здесь, чтобы получить помощь!",
-				"https://t.me/Keeper_vpn_support"),
-		),
-	)
+	supportButton := m.keyBoard.GetHelpButton()
 
 	// Отправка сообщения пользователю
 	msg := tgbotapi.NewMessage(chatID, msgText)
@@ -893,11 +896,72 @@ func (m *MessengerBot) SetLimitForExpiredKeys() {
 	}
 }
 
-//// TimeFunction - врEменная функция
-//func (m *MessengerBot) TimeFunction(update tgbotapi.Update) {
-//	messageText := fmt.Sprint("На стадии разработки!!!")
-//	msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)
-//	if _, err := m.botAPI.Send(msg); err != nil {
-//		return
-//	}
-//}
+// CheckAndNotifyExpiringKeys - функция-ticket для уведомления об истечении срока ключа.
+func (m *MessengerBot) CheckAndNotifyExpiringKeys() {
+	const op = "internal/bot/messages.go/CheckAndNotifyExpiringKeys"
+
+	ticker := time.NewTicker(time.Hour * 12)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			slog.Info("Старт проверки ключей на их срок действия")
+
+			userIDs, err := m.repo.CheckExpiringKeysAndNotify()
+			if err != nil {
+				continue
+			}
+
+			slog.Info(fmt.Sprintf("Найдено %v users, у кого скоро закончится подписка", len(userIDs)))
+
+			var wg sync.WaitGroup
+			for _, userID := range userIDs {
+				wg.Add(1)
+				go func(userID int) {
+					defer wg.Done()
+
+					// Сформированное сообщение с кнопкой
+					msgText := "⚠️ *Ваш ключ доступа скоро истечет!*\n\n" +
+						"⏳ *Пожалуйста, продлите подписку, чтобы продолжать пользоваться сервисом и оставаться в сети.*\n\n" +
+						"🔗 *Если у вас возникли вопросы, свяжитесь с нашей поддержкой.*"
+
+					// Используем существующие методы для создания кнопок
+					supportButton := m.keyBoard.GetHelpButton()         // Кнопка поддержки
+					paymentButton := m.keyBoard.GetStartButtonWithKey() // Кнопка для продления подписки
+
+					// Создаем разметку с двумя строками: одна для поддержки, другая для продления подписки
+					buttons := [][]tgbotapi.InlineKeyboardButton{
+						// Первая строка с кнопкой поддержки
+						supportButton.InlineKeyboard[0],
+						// Вторая строка с кнопкой продления подписки
+						paymentButton.InlineKeyboard[0],
+					}
+
+					// Создание сообщения с кнопками
+					msg := tgbotapi.NewMessage(int64(userID), msgText)
+					msg.ParseMode = "Markdown" // Устанавливаем форматирование Markdown
+
+					// Добавляем объединенные кнопки в сообщение
+					msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(buttons...)
+
+					_, err = m.botAPI.Send(msg)
+					if err != nil {
+						slog.Error(op, "Ошибка отправки сообщения:", slog.String("error", err.Error()))
+						return
+					}
+					slog.Info(fmt.Sprintf("Сообщение о скором протухании ключа отправлено пользователю: %v", userID))
+
+				}(userID)
+
+				// запрос в базу на изменение поля
+				if err = m.repo.UpdateExpiringKey(userID, true); err != nil {
+					continue
+				}
+			}
+
+			// Ждем завершения всех горутин
+			wg.Wait()
+		}
+	}
+}

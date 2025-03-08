@@ -193,6 +193,73 @@ func (r *Repo) GetExpirationTimeKeysID() ([]int, error) {
 	return expiredKeys, nil
 }
 
+// CheckExpiringKeysAndNotify - функция для получения userID юзеров у которых скоро протухнет ключ
+func (r *Repo) CheckExpiringKeysAndNotify() ([]int, error) {
+	const op = "internal/bot/repository.go/CheckExpiringKeysAndNotify"
+
+	query := `SELECT user_id FROM keys WHERE expires_at <= NOW() + INTERVAL '24 HOURS'
+			AND expiration_notified = FALSE`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		err = fmt.Errorf("oшибка запроса в базу: %w", err)
+		slog.Error(op, err.Error())
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Слайс для хранения user_id с истекающими ключами
+	var userIDs []int
+
+	// Чтение результатов запроса
+	for rows.Next() {
+		var userID int
+		if err = rows.Scan(&userID); err != nil {
+			slog.Error(op, "Ошибка сканирования ответа", slog.String("error", err.Error()))
+			return nil, err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	// Проверка на наличие ошибок при итерации по строкам
+	if err = rows.Err(); err != nil {
+		slog.Error(op, "Ошибка при проверке сканирования данных", slog.String("error", err.Error()))
+		return nil, err
+	}
+	return userIDs, nil
+}
+
+// UpdateExpiringKey - функция которая меняет флажок expiration_at для ключа.
+func (r *Repo) UpdateExpiringKey(userID int, flag bool) error {
+	const op = "internal/bot/repository.go/UpdateExpiringKey"
+
+	query := `UPDATE keys SET expiration_notified = $1 WHERE user_id = $2`
+
+	result, err := r.db.Exec(query, flag, userID)
+	if err != nil {
+		slog.Error(op, "Ошибка при обновлении expiration_at", err)
+		return err
+	}
+
+	// Проверяем, были ли обновлены строки
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		slog.Error(op, "Ошибка получения количества обновленных строк", err)
+		return err
+	}
+
+	if rowsAffected == 0 {
+		slog.Warn(op, "Не найден ключ с таким userID", "userID", userID)
+		return fmt.Errorf("ключ с userID=%d не найден", userID)
+	}
+
+	slog.Info("Флажок expiration_notified успешно обновлён",
+		slog.Int("userID", userID),
+		slog.Bool("flag", flag),
+	)
+	return nil
+}
+
 // UpdateProcessedKey - функция которая меняет флажок processed для ключа.
 func (r *Repo) UpdateProcessedKey(keyID int, flag bool) error {
 	const op = "internal/bot/repository.go/UpdateProcessedKey"
